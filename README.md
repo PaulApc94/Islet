@@ -83,12 +83,18 @@ Pour mettre à jour, relance la même commande après un `git pull`.
 - **Passe le pointeur sur l'encoche** : l'île gonfle légèrement, puis s'ouvre.
   Éloigne-le et elle se referme.
 - **Les réglages** sont dans l'icône en forme de capsule de la barre des menus :
-  activer ou non chaque activité, ouvrir au survol ou seulement au clic, retour
-  haptique, lancement au démarrage du Mac, quitter.
+  activer ou non chaque activité (dont la musique), ouvrir au survol ou
+  seulement au clic, retour haptique, lancement au démarrage du Mac, quitter.
+- **Si l'icône a disparu** (macOS cache derrière l'encoche les icônes qui ne
+  tiennent pas dans la barre des menus) : fais un clic droit sur l'île, ou
+  relance Islet depuis Spotlight. Le même menu s'ouvre.
 - **Sur un Mac sans encoche** (ou un écran externe seul), l'île se dessine en
   haut de l'écran, au centre : vise le bord supérieur pour l'ouvrir.
+- L'île s'efface pendant Mission Control et reste visible au-dessus des apps en
+  plein écran.
 
-L'interface est en français sur un Mac en français, en anglais sinon.
+L'interface est en français si le français passe avant l'anglais dans les
+langues préférées du Mac, en anglais sinon.
 
 ## Désinstallation
 
@@ -97,7 +103,8 @@ L'interface est en français sur un Mac en français, en anglais sinon.
 ```
 
 Le script ferme l'app, retire son lancement au démarrage, supprime `Islet.app`
-et efface ses réglages.
+(y compris une copie compilée dans le dossier `build/` du projet) et efface ses
+réglages.
 
 ## Sous le capot
 
@@ -146,6 +153,11 @@ Quelques choix qui expliquent le comportement :
   s'affiche.
 - Les barres audio sont décoratives : elles ne suivent pas le signal réel, ce
   qui demanderait l'autorisation d'enregistrer l'écran.
+- Pendant la lecture, l'île déborde d'environ 44 points de chaque côté de
+  l'encoche, par-dessus la barre des menus : un menu ou une icône placé juste à
+  côté de l'encoche est alors masqué, et le survoler ouvre l'île. Si cela te
+  gêne, décoche « Musique en direct » dans les réglages : l'île reste cachée
+  derrière l'encoche et s'ouvre toujours au survol.
 - Développée et vérifiée sur un MacBook Pro 14" (puce Apple, macOS 27). La
   disposition sans encoche n'a été vérifiée qu'en simulation, et les Mac Intel
   n'ont pas été testés.
@@ -162,16 +174,26 @@ compile et assemble `build/Islet.app` ; `make run` la lance directement,
 `make test` exécute les tests de la logique (états de l'île, géométrie,
 position de lecture) et `make clean` efface les produits de compilation.
 
+Une seule Islet tourne à la fois : une deuxième se ferme aussitôt (le journal
+système dit pourquoi). `make run` arrête donc la version installée ; pour la
+retrouver ensuite, lance `open /Applications/Islet.app`.
+
 Deux outils évitent d'avoir à toucher au matériel pour tester :
 
 - `swift scripts/dev/fake-player.swift` s'enregistre comme lecteur auprès de
   macOS avec trois faux morceaux, sans émettre de son. Pratique pour tester le
   lecteur et ses commandes.
-- Lancée avec `ISLET_DEBUG=1`, l'app obéit à `scripts/dev/islet-debug.sh` :
-  `expand`, `collapse`, `volume`, `charging`, `low`, `output`, `track`,
-  `toggle`, `next`, `previous`, et `snapshot:/chemin/absolu.png`, qui fait
-  dessiner l'île par l'app elle-même dans une image (les captures de ce README
-  viennent de là). Ajoute `ISLET_NOTCHLESS=1` pour simuler un Mac sans encoche.
+- Lancée avec `ISLET_DEBUG=1 make run`, l'app obéit à
+  `scripts/dev/islet-debug.sh` : `expand`, `collapse`, `hover`, `unhover`,
+  `volume`, `mute`, `charging`, `low`, `output`, `track`, et
+  `snapshot:/chemin/absolu.png`, qui fait dessiner l'île par l'app elle-même
+  dans une image (les captures de ce README viennent de là). `toggle`, `next` et
+  `previous` appuient sur les boutons du lecteur : ils agissent sur ce qui joue
+  vraiment, donc à utiliser avec le faux lecteur. Ajoute `ISLET_NOTCHLESS=1`
+  pour simuler un Mac sans encoche.
+- Attention : ces images ne montrent que l'île, pas les autres fenêtres. Pour
+  savoir si quelque chose la recouvre (la barre des menus, par exemple), il faut
+  regarder l'écran lui-même.
 
 À savoir avant de contribuer : avec le SDK de macOS 27, l'attribut `@State` de
 SwiftUI est une macro dont le plugin n'est livré qu'avec Xcode. Pour que le

@@ -7,6 +7,10 @@ final class Settings: ObservableObject {
 
     /// Hovering the island opens it; when off, a click is required.
     @Published var expandOnHover: Bool { didSet { defaults.set(expandOnHover, forKey: Key.expandOnHover) } }
+    /// The compact player beside the notch while something plays. Off, the
+    /// island stays hidden behind the notch (and off the menu bar items next
+    /// to it) until it is hovered.
+    @Published var showNowPlaying: Bool { didSet { defaults.set(showNowPlaying, forKey: Key.showNowPlaying) } }
     @Published var showVolume: Bool { didSet { defaults.set(showVolume, forKey: Key.showVolume) } }
     @Published var showPower: Bool { didSet { defaults.set(showPower, forKey: Key.showPower) } }
     @Published var showAudioOutput: Bool { didSet { defaults.set(showAudioOutput, forKey: Key.showAudioOutput) } }
@@ -17,6 +21,7 @@ final class Settings: ObservableObject {
 
     private enum Key {
         static let expandOnHover = "expandOnHover"
+        static let showNowPlaying = "showNowPlaying"
         static let showVolume = "showVolume"
         static let showPower = "showPower"
         static let showAudioOutput = "showAudioOutput"
@@ -28,6 +33,7 @@ final class Settings: ObservableObject {
         self.defaults = defaults
         defaults.register(defaults: [
             Key.expandOnHover: true,
+            Key.showNowPlaying: true,
             Key.showVolume: true,
             Key.showPower: true,
             Key.showAudioOutput: true,
@@ -35,6 +41,7 @@ final class Settings: ObservableObject {
             Key.haptics: true,
         ])
         expandOnHover = defaults.bool(forKey: Key.expandOnHover)
+        showNowPlaying = defaults.bool(forKey: Key.showNowPlaying)
         showVolume = defaults.bool(forKey: Key.showVolume)
         showPower = defaults.bool(forKey: Key.showPower)
         showAudioOutput = defaults.bool(forKey: Key.showAudioOutput)

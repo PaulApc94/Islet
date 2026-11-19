@@ -134,14 +134,22 @@ final class SpectrumLayerView: NSView {
             bar.backgroundColor = color.cgColor
         }
         CATransaction.commit()
-        animate()
+        // Layout runs again during transitions: restarting the loop each time
+        // would make the bars jump back to their first keyframe.
+        if bounds.size != animatedSize { animate() }
     }
 
     // Core Animation drops running animations when a view leaves its window.
+    // SwiftUI also re-parents the view inside the same window while a
+    // transition runs: only restart a loop that was really dropped.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window != nil { animate() }
+        guard window != nil, bars.first?.animation(forKey: Self.animationKey) == nil else { return }
+        animate()
     }
+
+    /// The size the running animations were built for.
+    private var animatedSize: CGSize = .zero
 
     private var barWidth: CGFloat { bounds.width / CGFloat(bars.count) * 0.56 }
     private var restHeight: CGFloat { max(barWidth, bounds.height * 0.16) }
@@ -153,6 +161,7 @@ final class SpectrumLayerView: NSView {
 
     private func animate() {
         guard bounds.width > 0, bounds.height > 0 else { return }
+        animatedSize = bounds.size
 
         for (index, bar) in bars.enumerated() {
             let current = bar.presentation()?.bounds.height ?? bar.bounds.height

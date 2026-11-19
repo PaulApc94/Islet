@@ -69,8 +69,9 @@ private struct BatteryLabel: View {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(Color.green)
+                        .accessibilityLabel(L10n.t("En charge", "Charging"))
                 }
-                Text("\(state.percent) %")
+                Text(L10n.percent(state.percent))
                     .font(.system(size: 11, weight: .medium).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1)
@@ -100,11 +101,16 @@ private struct PlayerView: View {
             Button {
                 model.openSourceApp()
             } label: {
+                // The effect goes before the fixed frame: that way the one cover
+                // grows from the compact island's size instead of two covers of
+                // fixed sizes sliding over each other.
                 ArtworkView(nowPlaying: nowPlaying, cornerRadius: 16)
+                    .matchedGeometryEffect(id: ArtworkView.geometryID, in: namespace)
                     .frame(width: artworkSide, height: artworkSide)
             }
             .buttonStyle(PressableStyle())
-            .matchedGeometryEffect(id: ArtworkView.geometryID, in: namespace)
+            .accessibilityLabel(nowPlaying.source.map { L10n.t("Ouvrir \($0.name)", "Open \($0.name)") }
+                ?? L10n.t("Pochette", "Artwork"))
             .shadow(color: nowPlaying.accentColor.opacity(0.28), radius: 12, y: 4)
 
             VStack(alignment: .leading, spacing: 0) {
@@ -188,7 +194,9 @@ private struct ProgressScrubber: View {
         // step): a three-minute track needs two frames per second, not sixty.
         // Every redraw re-rasterises the island's shadow, so this is the
         // difference between 7 % and 1 % of CPU while the island is open.
-        let interval = min(max(nowPlaying.duration / 250, 0.1), 0.5)
+        // With no duration (radio, live streams) the bar never moves: only the
+        // clock ticks, and half a second keeps it from skipping a second.
+        let interval = nowPlaying.duration > 0 ? min(max(nowPlaying.duration / 250, 0.1), 0.5) : 0.5
         TimelineView(.animation(minimumInterval: interval, paused: !nowPlaying.isPlaying)) { timeline in
             let duration = nowPlaying.duration
             let elapsed = nowPlaying.elapsed(at: timeline.date)
@@ -213,6 +221,19 @@ private struct ProgressScrubber: View {
                     }
                 }
                 .frame(height: 10)
+                // Drawn shapes are invisible to VoiceOver: expose the bar as one
+                // adjustable element that seeks by ten seconds.
+                .accessibilityElement()
+                .accessibilityLabel(L10n.t("Position de lecture", "Playback Position"))
+                .accessibilityValue(Self.clock(shown))
+                .accessibilityAdjustableAction { direction in
+                    guard duration > 0 else { return }
+                    switch direction {
+                    case .increment: onSeek(min(duration, elapsed + 10))
+                    case .decrement: onSeek(max(0, elapsed - 10))
+                    @unknown default: break
+                    }
+                }
 
                 HStack {
                     Text(Self.clock(shown))
@@ -239,7 +260,9 @@ private struct ProgressScrubber: View {
     }
 
     private static func clock(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded(.down))
+        // Int(_:) traps beyond Int.max: never trust a player's numbers that far.
+        let bounded = seconds.isFinite ? min(max(seconds, 0), 3_599_999) : 0
+        let total = Int(bounded.rounded(.down))
         let hours = total / 3600
         let minutes = (total % 3600) / 60
         let secs = total % 60

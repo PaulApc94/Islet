@@ -35,6 +35,11 @@ final class IslandWindowController {
     /// The left button went down on the island and has not been released yet.
     private var isPressingIsland = false
 
+    /// A right-click (or control-click) on the island. It opens the settings
+    /// menu, which must stay reachable even when macOS hides the menu-bar icon
+    /// behind the notch.
+    var onSecondaryClick: (() -> Void)?
+
     init(model: IslandModel) {
         self.model = model
 
@@ -45,7 +50,10 @@ final class IslandWindowController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        // `.transient` rather than `.stationary`: the island still shows on every
+        // Space and over full-screen apps, but steps aside while Mission Control
+        // is open instead of covering (and taking the clicks of) the Spaces bar.
+        panel.collectionBehavior = [.canJoinAllSpaces, .transient, .fullScreenAuxiliary, .ignoresCycle]
         panel.isMovable = false
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
@@ -177,15 +185,27 @@ final class IslandWindowController {
         }) {
             eventMonitors.append(monitor)
         }
-        // Local: events aimed at the island itself, clicks included.
-        let localMask = mask.union([.leftMouseDown, .leftMouseUp])
+        // Local: every event the app receives, clicks included. That covers the
+        // island but also the menu-bar icon's own window, hence the window checks.
+        let localMask = mask.union([.leftMouseDown, .leftMouseUp, .rightMouseDown])
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: localMask, handler: { [weak self] event in
+            guard let self else { return event }
+            let onIsland = event.window === self.panel
             switch event.type {
-            case .leftMouseDown: self?.isPressingIsland = true
-            case .leftMouseUp: self?.isPressingIsland = false
-            default: break
+            case .leftMouseDown where onIsland && event.modifierFlags.contains(.control),
+                 .rightMouseDown where onIsland:
+                self.onSecondaryClick?()
+                return nil
+            case .leftMouseDown:
+                // Only a press on the island itself: a click on the menu-bar
+                // icon must open its menu, not the island.
+                self.isPressingIsland = onIsland
+            case .leftMouseUp:
+                self.isPressingIsland = false
+            default:
+                break
             }
-            self?.pointerDidMove()
+            self.pointerDidMove()
             return event
         }) {
             eventMonitors.append(monitor)
@@ -195,18 +215,20 @@ final class IslandWindowController {
     private func pointerDidMove() {
         let location = NSEvent.mouseLocation
         let size = model.hitSize
-        // A few extra points above the screen edge: the pointer rests exactly on it.
         let hitArea = CGRect(x: screenFrame.midX - size.width / 2,
                              y: screenFrame.maxY - size.height,
                              width: size.width,
-                             height: size.height + 4)
+                             height: size.height)
 
         // A press that started on the island (scrubbing the progress bar) keeps
         // it open even when the pointer strays outside before the button is released.
         if isPressingIsland, NSEvent.pressedMouseButtons & 1 == 0 {
             isPressingIsland = false
         }
-        let inside = isPressingIsland || hitArea.contains(location)
+        // AppKit's mouse test includes the top edge, where a pointer pushed
+        // against the top of the screen rests, and nothing above it: a display
+        // arranged above this one never counts as the island.
+        let inside = isPressingIsland || NSMouseInRect(location, hitArea, false)
 
         if panel.ignoresMouseEvents == inside {
             panel.ignoresMouseEvents = !inside
@@ -219,9 +241,12 @@ final class IslandWindowController {
     /// missed mouse event must never leave the island stuck open.
     private func setHoverPoll(active: Bool) {
         if active, hoverPoll == nil {
-            hoverPoll = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+            let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.pointerDidMove() }
             }
+            // Common modes: it must keep running while a menu is being tracked.
+            RunLoop.main.add(timer, forMode: .common)
+            hoverPoll = timer
         } else if !active, let timer = hoverPoll {
             timer.invalidate()
             hoverPoll = nil

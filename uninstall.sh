@@ -1,7 +1,8 @@
 #!/bin/bash
 #
-# Removes Islet: quits it, deletes the installed app bundle(s) and its
-# preferences. Touches nothing else (the repo and its build/ folder stay).
+# Removes Islet: quits it, withdraws its launch at login, deletes the installed
+# app bundle(s), the copy built in this clone's build/ folder, and its
+# preferences. Touches nothing else (the sources stay).
 #
 # Usage: ./uninstall.sh
 
@@ -9,6 +10,10 @@ set -euo pipefail
 
 readonly APP_NAME="Islet"
 readonly BUNDLE_ID="io.github.paulapc94.islet"
+
+# (cd is silenced because it echoes the directory when CDPATH is set.)
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+readonly ROOT
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
     BOLD=$'\033[1m'; RESET=$'\033[0m'
@@ -92,7 +97,8 @@ quit_app
 
 removed=0
 failed=0
-for app in "/Applications/$APP_NAME.app" "$HOME/Applications/$APP_NAME.app"; do
+# The copy in build/ counts too: Spotlight indexes it and would relaunch the island.
+for app in "/Applications/$APP_NAME.app" "$HOME/Applications/$APP_NAME.app" "$ROOT/build/$APP_NAME.app"; do
     [ -e "$app" ] || [ -L "$app" ] || continue
     if is_foreign_app "$app"; then
         warn "$app est une autre application portant le même nom : elle est laissée intacte."

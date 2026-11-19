@@ -1,11 +1,14 @@
 import AppKit
 import ServiceManagement
 
-/// The menu-bar icon: the only place where Islet has settings.
+/// The settings menu. It lives in the menu-bar icon, and also opens from the
+/// island itself (right-click) or when the app is launched again: on a crowded
+/// menu bar, macOS hides the icons that do not fit behind the notch.
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let settings: Settings
+    private let menu = NSMenu()
 
     init(settings: Settings) {
         self.settings = settings
@@ -19,9 +22,23 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             button.image = image
         }
 
-        let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
+    }
+
+    /// Opens the settings menu at a point on screen (global coordinates).
+    func showMenu(at location: NSPoint) {
+        // Without this the menu would not take the keyboard, and would not
+        // close when the user clicks elsewhere.
+        NSApp.activate()
+        menu.popUp(positioning: nil, at: location, in: nil)
+    }
+
+    /// Opens the settings menu just below the notch: a place that is always on screen.
+    func showMenuBelowNotch() {
+        guard let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main else { return }
+        let menuBar = screen.safeAreaInsets.top > 0 ? screen.safeAreaInsets.top : NSStatusBar.system.thickness
+        showMenu(at: NSPoint(x: screen.frame.midX - 100, y: screen.frame.maxY - menuBar - 6))
     }
 
     // Rebuilt on every opening, so the checkmarks always reflect the current state.
@@ -33,6 +50,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
 
         menu.addItem(header(L10n.t("Activités", "Activities")))
+        menu.addItem(toggle(L10n.t("Musique en direct", "Live Music"), \.showNowPlaying))
         menu.addItem(toggle(L10n.t("Changement de titre", "Track Changes"), \.showTrackChanges))
         menu.addItem(toggle(L10n.t("Volume", "Volume"), \.showVolume))
         menu.addItem(toggle(L10n.t("Charge et batterie", "Charging & Battery"), \.showPower))
@@ -41,13 +59,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         menu.addItem(toggle(L10n.t("Ouvrir au survol", "Expand on Hover"), \.expandOnHover))
         menu.addItem(toggle(L10n.t("Retour haptique", "Haptic Feedback"), \.haptics))
-
-        let login = NSMenuItem(title: L10n.t("Lancer au démarrage", "Launch at Login"),
-                               action: #selector(toggleLaunchAtLogin),
-                               keyEquivalent: "")
-        login.target = self
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        menu.addItem(login)
+        menu.addItem(loginItem())
         menu.addItem(.separator())
 
         let quit = NSMenuItem(title: L10n.t("Quitter Islet", "Quit Islet"),
@@ -75,17 +87,44 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         settings[keyPath: keyPath].toggle()
     }
 
+    // MARK: Launch at login
+
+    private func loginItem() -> NSMenuItem {
+        let status = SMAppService.mainApp.status
+        // Turned off in System Settings: registering again would not turn it
+        // back on, only the user can, so the item leads there instead.
+        let needsApproval = status == .requiresApproval
+        let title = needsApproval
+            ? L10n.t("Lancer au démarrage (à autoriser dans Réglages)…",
+                     "Launch at Login (allow in System Settings)…")
+            : L10n.t("Lancer au démarrage", "Launch at Login")
+        let item = NSMenuItem(title: title, action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        item.target = self
+        item.state = status == .enabled ? .on : (needsApproval ? .mixed : .off)
+        return item
+    }
+
     @objc private func toggleLaunchAtLogin() {
         let service = SMAppService.mainApp
         do {
-            if service.status == .enabled {
+            switch service.status {
+            case .enabled:
                 try service.unregister()
-            } else {
+            case .requiresApproval:
+                SMAppService.openSystemSettingsLoginItems()
+            default:
                 try service.register()
+                if service.status == .requiresApproval {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
             }
         } catch {
             NSLog("Islet: could not change the login item: %@", error.localizedDescription)
-            NSSound.beep()
+            if service.status == .requiresApproval {
+                SMAppService.openSystemSettingsLoginItems()
+            } else {
+                NSSound.beep()
+            }
         }
     }
 }

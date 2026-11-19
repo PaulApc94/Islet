@@ -48,20 +48,26 @@ enum {
     kCommandPrevious = 5,
 };
 
-static void emit(NSDictionary *payload) {
+/// The app drops lines longer than 64 MB and base64 inflates by 4/3: a bigger
+/// image is treated as absent rather than taking its whole line with it.
+static const NSUInteger kMaxArtworkBytes = 16 << 20;
+
+/// Returns NO when the line was dropped.
+static BOOL emit(NSDictionary *payload) {
     // NSJSONSerialization raises instead of returning an error for values it
     // cannot encode. A dropped update is harmless; a crashed bridge is not.
-    if (![NSJSONSerialization isValidJSONObject:payload]) return;
+    if (![NSJSONSerialization isValidJSONObject:payload]) return NO;
     NSData *json = nil;
     @try {
         json = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
     } @catch (NSException *exception) {
-        return;
+        return NO;
     }
-    if (json == nil) return;
+    if (json == nil) return NO;
     fwrite(json.bytes, 1, json.length, stdout);
     fputc('\n', stdout);
     fflush(stdout);
+    return YES;
 }
 
 /// FNV-1a over a sample of the data: cheap and good enough to tell covers apart.
@@ -114,18 +120,21 @@ static void publish(NSDictionary *info, BOOL playing, int pid) {
     }
 
     NSData *artwork = info[@"kMRMediaRemoteNowPlayingInfoArtworkData"];
-    if ([artwork isKindOfClass:[NSData class]] && artwork.length > 0) {
+    NSString *sentArtworkId = nil;
+    if ([artwork isKindOfClass:[NSData class]] && artwork.length > 0 && artwork.length <= kMaxArtworkBytes) {
         NSString *identifier = artworkIdentifier(artwork);
         out[@"artworkId"] = identifier;
         if (![identifier isEqualToString:sLastArtworkId]) {
             out[@"artwork"] = [artwork base64EncodedStringWithOptions:0];
-            sLastArtworkId = identifier;
+            sentArtworkId = identifier;
         }
     } else {
         out[@"artworkId"] = @"";
     }
 
-    emit(out);
+    // The image only counts as delivered once its line went out: later lines
+    // carry just the id, so a dropped one would cost the cover for the track.
+    if (emit(out) && sentArtworkId) sLastArtworkId = sentArtworkId;
 }
 
 static void refresh(void) {

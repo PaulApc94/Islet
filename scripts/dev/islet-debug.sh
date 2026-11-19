@@ -3,7 +3,7 @@
 # Drives a running Islet that was started with ISLET_DEBUG=1, so that every
 # state of the island can be shown without touching the mouse or the hardware.
 #
-#   ISLET_DEBUG=1 build/Islet.app/Contents/MacOS/Islet &
+#   ISLET_DEBUG=1 make run          (stops the installed copy: one Islet at a time)
 #   scripts/dev/islet-debug.sh expand
 #
 # Commands: expand, collapse, hover, unhover, volume, mute, charging, low,

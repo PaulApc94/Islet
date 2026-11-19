@@ -44,9 +44,11 @@ struct CompactMediaView: View {
         let side = min(metrics.notchHeight - 10, 24)
         VStack(spacing: 0) {
             WingRow(metrics: metrics, wing: IslandDesign.mediaWing) {
+                // Effect before the fixed frame, as in the expanded player: the
+                // cover morphs between the two sizes instead of sliding.
                 ArtworkView(nowPlaying: nowPlaying, cornerRadius: side * 0.27)
-                    .frame(width: side, height: side)
                     .matchedGeometryEffect(id: ArtworkView.geometryID, in: namespace)
+                    .frame(width: side, height: side)
             } trailing: {
                 SpectrumView(color: nowPlaying.accent ?? .white, isPlaying: nowPlaying.isPlaying)
                     .frame(width: 18, height: 14)
@@ -114,6 +116,8 @@ struct HUDView: View {
             HStack(spacing: 4) {
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 11, weight: .bold))
+                    // The text next to it already says it.
+                    .accessibilityHidden(true)
                 Text(L10n.t("En charge", "Charging"))
                     .font(.system(size: 11, weight: .semibold))
                     .lineLimit(1)
@@ -139,7 +143,7 @@ struct HUDView: View {
                 .frame(width: 52, height: 5)
         case .charging(let percent):
             HStack(spacing: 5) {
-                Text("\(percent) %")
+                Text(L10n.percent(percent))
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
                     .foregroundStyle(Color.green)
                     .lineLimit(1)
@@ -147,7 +151,7 @@ struct HUDView: View {
                 BatteryGlyph(percent: percent, tint: .green)
             }
         case .lowBattery(let percent):
-            Text("\(percent) %")
+            Text(L10n.percent(percent))
                 .font(.system(size: 11, weight: .semibold).monospacedDigit())
                 .foregroundStyle(Color.red)
                 .lineLimit(1)

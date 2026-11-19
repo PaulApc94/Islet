@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 // MARK: - Geometry
@@ -152,8 +153,21 @@ final class IslandModel: ObservableObject {
     private let hoverIntent = DelayedAction()
     private let mediaLinger = DelayedAction()
 
+    /// The last track the island saw playing. Announcements compare with it
+    /// rather than with the previous snapshot: a track first reported paused,
+    /// or a player that briefly reports nothing, must not fool them.
+    private var lastPlayingTrackID: String?
+    private var settingsObservation: AnyCancellable?
+
     init(settings: Settings = .shared) {
         self.settings = settings
+        // `@Published` emits before storing the new value: use the one emitted.
+        settingsObservation = settings.$showNowPlaying
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                MainActor.assumeIsolated { self?.nowPlayingActivityChanged(enabled: enabled) }
+            }
     }
 
     func start() {
@@ -231,8 +245,15 @@ final class IslandModel: ObservableObject {
         if isExpanded {
             return CGSize(width: layout.width + 20, height: layout.height + 14)
         }
+        // A banner's caption hangs below the menu bar, over the apps' windows:
+        // it grew under the pointer there, the pointer never aimed at it. Only
+        // the strip beside the notch counts.
+        var height = layout.height
+        if case .hud(let hud) = mode, hud.hasCaption {
+            height = metrics.notchHeight
+        }
         return CGSize(width: max(layout.width, metrics.notchWidth),
-                      height: max(layout.height, metrics.hasNotch ? metrics.notchHeight : 5))
+                      height: max(height, metrics.hasNotch ? metrics.notchHeight : 5))
     }
 
     // MARK: Pointer
@@ -299,7 +320,8 @@ final class IslandModel: ObservableObject {
 
     // MARK: Service events
 
-    private func receive(nowPlaying snapshot: NowPlaying?) {
+    /// Internal rather than private so the tests can play snapshots through it.
+    func receive(nowPlaying snapshot: NowPlaying?) {
         let previous = nowPlaying
         withAnimation(IslandAnimation.morph) { nowPlaying = snapshot }
 
@@ -312,18 +334,40 @@ final class IslandModel: ObservableObject {
             return
         }
 
+        guard settings.showNowPlaying else {
+            // Still tracked, so turning the activity on later does not
+            // announce the current track as a new one.
+            if snapshot.isPlaying { lastPlayingTrackID = snapshot.trackID }
+            return
+        }
+
         if snapshot.isPlaying {
             mediaLinger.cancel()
             if !showsMedia {
                 withAnimation(IslandAnimation.morph) { showsMedia = true }
             }
-            if snapshot.trackID != previous?.trackID, settings.showTrackChanges {
+            if snapshot.trackID != lastPlayingTrackID, settings.showTrackChanges {
                 present(.track, for: 2.8)
             }
+            lastPlayingTrackID = snapshot.trackID
         } else if showsMedia, previous?.isPlaying != false {
             // Just paused: linger so a quick pause/resume does not make the island jump.
             mediaLinger.schedule(after: 4) { [weak self] in
                 withAnimation(IslandAnimation.close) { self?.showsMedia = false }
+            }
+        }
+    }
+
+    private func nowPlayingActivityChanged(enabled: Bool) {
+        if enabled {
+            if nowPlaying?.isPlaying == true, !showsMedia {
+                withAnimation(IslandAnimation.morph) { showsMedia = true }
+            }
+        } else {
+            mediaLinger.cancel()
+            withAnimation(IslandAnimation.close) {
+                showsMedia = false
+                if hud == .track { hud = nil }
             }
         }
     }

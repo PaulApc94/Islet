@@ -13,6 +13,13 @@ private func pause(_ seconds: TimeInterval) async {
     try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
 }
 
+private func song(_ title: String, playing: Bool) -> NowPlaying {
+    NowPlaying(title: title, artist: "Artist", album: "Album",
+               duration: 180, elapsedAtTimestamp: 0, timestamp: Date(),
+               playbackRate: playing ? 1 : 0, isPlaying: playing,
+               artwork: nil, artworkID: "", accent: nil, source: nil)
+}
+
 // MARK: - State machine
 
 @Suite("Island state machine")
@@ -45,6 +52,59 @@ final class IslandModelTests {
         #expect(controller.windowLevel == IslandWindowController.level)
         #expect(controller.windowLevel.rawValue > NSWindow.Level.mainMenu.rawValue)
         #expect(controller.windowLevel.rawValue > NSWindow.Level.statusBar.rawValue)
+    }
+
+    /// Opening the island dismisses any banner: a quick way to start from a clean slate.
+    private func clearBanner() {
+        model.setExpanded(true)
+        model.setExpanded(false)
+    }
+
+    @Test("A track first reported paused is still announced when it starts playing")
+    func trackFirstReportedPausedIsAnnounced() {
+        model.receive(nowPlaying: song("A", playing: true))
+        #expect(model.hud == .track)
+        clearBanner()
+
+        model.receive(nowPlaying: song("A", playing: false))
+        model.receive(nowPlaying: song("B", playing: false))
+        #expect(model.hud == nil)
+        model.receive(nowPlaying: song("B", playing: true))
+        #expect(model.hud == .track)
+    }
+
+    @Test("A player that briefly reports nothing does not get its track announced again")
+    func sameTrackAfterAGapIsNotAnnouncedAgain() {
+        model.receive(nowPlaying: song("A", playing: true))
+        clearBanner()
+
+        model.receive(nowPlaying: nil)
+        model.receive(nowPlaying: song("A", playing: true))
+        #expect(model.hud == nil)
+        #expect(model.mode == .media)
+    }
+
+    @Test("With the music activity off the island stays behind the notch, and follows the switch live")
+    func musicActivityCanBeTurnedOff() {
+        settings.showNowPlaying = false
+        model.receive(nowPlaying: song("A", playing: true))
+        #expect(model.mode == .idle)
+        #expect(model.hud == nil)
+        #expect(model.layout.width == notched.notchWidth)
+
+        settings.showNowPlaying = true
+        #expect(model.mode == .media)
+        #expect(model.hud == nil, "the track was already playing: it is not new")
+
+        settings.showNowPlaying = false
+        #expect(model.mode == .idle)
+    }
+
+    @Test("A banner's caption, below the menu bar, never counts as the island")
+    func captionIsNotPartOfTheHitArea() {
+        model.present(.output(AudioOutput(name: "AirPods", symbolName: "airpods")), for: 10)
+        #expect(model.layout.height > notched.notchHeight)
+        #expect(model.hitSize.height == notched.notchHeight)
     }
 
     @Test("At rest the island is exactly as big as the notch")

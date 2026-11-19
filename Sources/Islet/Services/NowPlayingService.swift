@@ -131,7 +131,9 @@ final class NowPlayingService {
         let override = ProcessInfo.processInfo.environment["ISLET_BRIDGE_PATH"] ?? ""
         let path = override.isEmpty
             ? Bundle.main.url(forResource: "IsletBridge", withExtension: "dylib")?.path
-            : override
+            // perl is a hardened binary: it refuses to load a relative path,
+            // which would make the bridge die and restart forever.
+            : URL(fileURLWithPath: override).standardizedFileURL.path
         guard let path, FileManager.default.isReadableFile(atPath: path) else { return nil }
         return path
     }
@@ -378,6 +380,11 @@ private enum Tuning {
     static let artworkGrace: TimeInterval = 0.12
     /// No sane line is longer; protects against a child that never sends "\n".
     static let maxLineLength = 64 << 20
+    /// Bounds past which a reported number is nonsense and counts as unknown.
+    /// They keep every position the island extrapolates far below Int.max.
+    static let maxSeconds: TimeInterval = 1e9 // about 31 years
+    static let maxRate = 1_000.0
+    static let maxTimestamp: TimeInterval = 1e10 // unix seconds, year 2286
 }
 
 // MARK: - Bridge process
@@ -452,13 +459,19 @@ private enum BridgeMessage: @unchecked Sendable {
         }
         guard let title = object["title"] as? String, !title.isEmpty else { return nil }
 
-        func number(_ key: String) -> Double? {
-            guard let value = (object[key] as? NSNumber)?.doubleValue, value.isFinite else { return nil }
+        // JSON only carries finite numbers, but a player can still report
+        // absurd ones (1e300 for a live stream, say). The island prints
+        // positions through Int(_:), which traps beyond Int.max: a value out
+        // of bounds counts as absent, as a non-finite one does in the bridge.
+        func number(_ key: String, limit: Double) -> Double? {
+            guard let value = (object[key] as? NSNumber)?.doubleValue, value.isFinite, abs(value) <= limit else {
+                return nil
+            }
             return value
         }
 
         let isPlaying = object["playing"] as? Bool ?? false
-        let timestamp = number("timestamp").map { Date(timeIntervalSince1970: $0) }
+        let timestamp = number("timestamp", limit: Tuning.maxTimestamp).map { Date(timeIntervalSince1970: $0) }
         let artworkID = object["artworkId"] as? String ?? ""
 
         // Decoding the image and sampling its colour is the expensive part:
@@ -475,11 +488,11 @@ private enum BridgeMessage: @unchecked Sendable {
             title: title,
             artist: object["artist"] as? String ?? "",
             album: object["album"] as? String ?? "",
-            duration: max(0, number("duration") ?? 0),
-            elapsed: max(0, number("elapsed") ?? 0),
+            duration: max(0, number("duration", limit: Tuning.maxSeconds) ?? 0),
+            elapsed: max(0, number("elapsed", limit: Tuning.maxSeconds) ?? 0),
             timestamp: timestamp ?? Date(),
             hasTimestamp: timestamp != nil,
-            rate: number("rate") ?? (isPlaying ? 1 : 0),
+            rate: number("rate", limit: Tuning.maxRate) ?? (isPlaying ? 1 : 0),
             isPlaying: isPlaying,
             pid: pid_t(truncatingIfNeeded: (object["pid"] as? NSNumber)?.intValue ?? 0),
             artworkID: artworkID,

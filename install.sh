@@ -193,6 +193,10 @@ for other in "/Applications/$APP_NAME.app" "$HOME/Applications/$APP_NAME.app"; d
         || warn "une autre copie d'$APP_NAME subsiste (droits insuffisants pour la supprimer) : $other. Pour éviter les doublons, mettez-la à la Corbeille depuis le Finder."
 done
 
+# The intermediate bundle in build/ is a third copy that Spotlight indexes and
+# can launch. It has served its purpose: `make build` recreates it on demand.
+rm -rf "$BUILT_APP" 2>/dev/null || true
+
 # Belt and braces: the build already strips extended attributes, but a
 # quarantine flag on the installed copy (it follows files out of a downloaded
 # zip) would make Gatekeeper refuse this locally built, ad-hoc signed app.
@@ -208,6 +212,6 @@ cat <<EOF
 ${BOLD}$APP_NAME est installée :${RESET} $INSTALLED_APP
 
   • L'îlot vit dans l'encoche, tout en haut de l'écran.
-  • Les réglages se trouvent dans l'icône $APP_NAME de la barre des menus.
+  • Les réglages : l'icône $APP_NAME de la barre des menus, ou un clic droit sur l'îlot.
   • Pour mettre à jour : relancez ./install.sh    Pour désinstaller : ./uninstall.sh
 EOF

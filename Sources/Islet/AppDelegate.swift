@@ -9,28 +9,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Two islands in the same notch would fight each other: the first one wins.
-        if let identifier = Bundle.main.bundleIdentifier {
-            let others = NSRunningApplication.runningApplications(withBundleIdentifier: identifier)
-                .filter { $0 != NSRunningApplication.current }
-            if !others.isEmpty {
-                NSApp.terminate(nil)
-                return
-            }
+        if let other = Self.otherRunningIslet() {
+            NSLog("Islet: another Islet is already running (pid %d), quitting", other.processIdentifier)
+            NSApp.terminate(nil)
+            return
         }
 
         let model = IslandModel()
         let windowController = IslandWindowController(model: model)
+        let statusItem = StatusItemController(settings: model.settings)
         self.model = model
         self.windowController = windowController
-        statusItem = StatusItemController(settings: model.settings)
+        self.statusItem = statusItem
 
+        windowController.onSecondaryClick = { [weak statusItem] in
+            statusItem?.showMenu(at: NSEvent.mouseLocation)
+        }
         windowController.show()
         model.start()
         installDebugCommands(for: model)
     }
 
+    /// Launching Islet again (Finder, Spotlight, Launchpad) opens the settings:
+    /// the menu-bar icon may be hidden behind the notch on a crowded menu bar.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        statusItem?.showMenuBelowNotch()
+        return false
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         model?.stop()
+    }
+
+    /// Matches by bundle identifier, and also by executable name for runs
+    /// outside the bundle (`swift run`), which have no identifier at all.
+    private static func otherRunningIslet() -> NSRunningApplication? {
+        let current = NSRunningApplication.current
+        let identifier = Bundle.main.bundleIdentifier ?? "io.github.paulapc94.islet"
+        return NSWorkspace.shared.runningApplications.first { app in
+            app.processIdentifier != current.processIdentifier
+                && (app.bundleIdentifier == identifier || app.executableURL?.lastPathComponent == "Islet")
+        }
     }
 
     /// Development aid: with ISLET_DEBUG=1 the island obeys commands posted as
