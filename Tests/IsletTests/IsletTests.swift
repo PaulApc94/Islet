@@ -38,6 +38,15 @@ final class IslandModelTests {
         defaults.removePersistentDomain(forName: domain)
     }
 
+    @Test("The panel sits above the menu bar: any lower and the menu bar hides everything beside the notch")
+    func panelSitsAboveTheMenuBar() {
+        _ = NSApplication.shared
+        let controller = IslandWindowController(model: model)
+        #expect(controller.windowLevel == IslandWindowController.level)
+        #expect(controller.windowLevel.rawValue > NSWindow.Level.mainMenu.rawValue)
+        #expect(controller.windowLevel.rawValue > NSWindow.Level.statusBar.rawValue)
+    }
+
     @Test("At rest the island is exactly as big as the notch")
     func restsBehindTheNotch() {
         #expect(model.mode == .idle)

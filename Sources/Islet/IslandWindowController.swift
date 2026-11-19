@@ -45,22 +45,31 @@ final class IslandWindowController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        // Above the menu bar and its status items, so the island can grow out of the notch.
-        panel.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
-        panel.isFloatingPanel = true
         panel.isMovable = false
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
         panel.ignoresMouseEvents = true
         panel.acceptsMouseMovedEvents = true
+        // Set last, and never alongside `isFloatingPanel`: that property resets
+        // the level to `.floating`, which is *below* the menu bar. The menu bar
+        // then covers the whole top strip and the island only shows under the
+        // notch, never beside it.
+        panel.level = Self.level
 
         let hostingView = IslandHostingView(rootView: IslandView(model: model))
         // The window drives the layout, never the other way round.
         hostingView.sizingOptions = []
         panel.contentView = hostingView
     }
+
+    /// Above the menu bar and its status items, so the island can grow out of
+    /// the notch on both sides.
+    static let level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
+
+    /// The level the panel really has (AppKit can change it behind our back).
+    var windowLevel: NSWindow.Level { panel.level }
 
     func show() {
         reposition()
