@@ -128,11 +128,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc private func toggleFit() {
-        if settings.fitToMenuBar, !MenuBarProbe.isTrusted {
-            // Already asked for: take the user to the switch itself.
-            MenuBarProbe.openAccessibilitySettings()
-            return
-        }
+        // Always a plain switch. While macOS has not allowed it, a click turns
+        // the option back off: nobody should have to grant a permission to get
+        // rid of it. Turning it on again asks again.
         settings.fitToMenuBar.toggle()
         if settings.fitToMenuBar, !MenuBarProbe.isTrusted {
             MenuBarProbe.requestPermission()

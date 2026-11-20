@@ -40,7 +40,6 @@ final class MenuBarProbe {
 
     private var observers: [NSObjectProtocol] = []
     private var timer: Timer?
-    private var ticks = 0
     private var wasTrusted = false
     private var isMeasuring = false
     private var needsAnotherPass = false
@@ -91,8 +90,9 @@ final class MenuBarProbe {
     }
 
     private func tick() {
-        ticks += 1
-        if Self.isTrusted != wasTrusted || ticks % 5 == 0 { refresh() }
+        // Every tick: a pass costs a couple of milliseconds in the background,
+        // and an icon can appear beside the notch without any notification.
+        refresh()
     }
 
     /// The menu bar is redrawn a moment after the notification.
@@ -112,15 +112,24 @@ final class MenuBarProbe {
         }
         isMeasuring = true
 
-        let owner = NSWorkspace.shared.menuBarOwningApplication?.processIdentifier
-        let pids = NSWorkspace.shared.runningApplications.map(\.processIdentifier)
+        // Islet itself is never asked through Accessibility: such a query is
+        // answered in-process, on the calling thread, and would run AppKit off
+        // the main thread. Its own icon is read right here instead.
+        let me = ProcessInfo.processInfo.processIdentifier
+        let menuOwner = NSWorkspace.shared.menuBarOwningApplication?.processIdentifier
+        let owner = menuOwner == me ? nil : menuOwner
+        let pids = NSWorkspace.shared.runningApplications.map(\.processIdentifier).filter { $0 != me }
+        let ownIcons = NSApp.windows.filter { $0.className.contains("StatusBar") }.map { window in
+            CGRect(x: window.frame.minX, y: geometry.primaryMaxY - window.frame.maxY,
+                   width: window.frame.width, height: window.frame.height)
+        }
         // Off the main thread: every app is asked, and a busy one may take a while to answer.
         queue.async {
             let items = Self.menuBarItems(owner: owner, pids: pids)
             let room = MenuBarRoom.around(notch: geometry.notch,
                                           screenMinX: geometry.minX,
                                           screenMaxX: geometry.maxX,
-                                          items: items.frames)
+                                          items: items.frames + ownIcons)
             DispatchQueue.main.async {
                 self.isMeasuring = false
                 guard self.timer != nil else { return }
@@ -164,7 +173,7 @@ final class MenuBarProbe {
 
     /// The notch in the window server's space, the one Accessibility speaks:
     /// origin at the top-left corner of the primary display, y downwards.
-    private static func notchGeometry() -> (notch: CGRect, minX: CGFloat, maxX: CGFloat)? {
+    private static func notchGeometry() -> (notch: CGRect, minX: CGFloat, maxX: CGFloat, primaryMaxY: CGFloat)? {
         guard let primary = NSScreen.screens.first,
               let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }),
               let left = screen.auxiliaryTopLeftArea,
@@ -173,7 +182,7 @@ final class MenuBarProbe {
                            y: primary.frame.maxY - screen.frame.maxY,
                            width: screen.frame.width - left.width - right.width,
                            height: screen.safeAreaInsets.top)
-        return (notch, screen.frame.minX, screen.frame.maxX)
+        return (notch, screen.frame.minX, screen.frame.maxX, primary.frame.maxY)
     }
 
     // MARK: Accessibility

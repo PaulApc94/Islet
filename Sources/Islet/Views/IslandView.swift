@@ -8,7 +8,10 @@ struct IslandView: View {
 
     var body: some View {
         let layout = model.layout
-        let shape = NotchShape(topRadius: layout.topRadius, bottomRadius: layout.bottomRadius)
+        let shape = NotchShape(topRadius: layout.topRadius,
+                               bottomRadius: layout.bottomRadius,
+                               neckWidth: layout.neckWidth,
+                               neckHeight: layout.neckHeight)
 
         Color.clear
             .frame(width: layout.width, height: layout.height)
@@ -38,7 +41,11 @@ struct IslandView: View {
             CompactMediaView(nowPlaying: nowPlaying,
                              metrics: model.metrics,
                              showsCaption: model.mode == .hud(.track),
-                             wings: model.mediaWings,
+                             // An announcement keeps both wings to the end, even if the
+                             // room changes meanwhile: its banner was sized for them.
+                             wings: model.mode == .hud(.track)
+                                 ? (IslandDesign.mediaWing, IslandDesign.mediaWing)
+                                 : model.mediaWings,
                              namespace: namespace)
                 .transition(.islandContent)
         } else if case .hud(let hud) = model.mode {

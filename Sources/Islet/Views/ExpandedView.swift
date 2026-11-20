@@ -11,6 +11,10 @@ struct ExpandedView: View {
         // around it, so the text never reflows during the animation.
         let layout = model.layout(for: .expanded)
         VStack(spacing: 0) {
+            // The neck crosses the menu bar behind the notch: nothing is drawn
+            // there, and the menu bar's own items stay visible on both sides.
+            Color.clear
+                .frame(height: layout.neckHeight)
             header
             if let nowPlaying = model.nowPlaying {
                 PlayerView(nowPlaying: nowPlaying, model: model, namespace: namespace)
@@ -24,14 +28,13 @@ struct ExpandedView: View {
     }
 
     private var header: some View {
-        WingRow(metrics: model.metrics,
-                wing: (IslandDesign.expandedWidth - model.metrics.notchWidth) / 2,
-                ear: IslandDesign.expandedEar,
-                inset: 10) {
+        HStack(spacing: 8) {
             sourceLabel
-        } trailing: {
+            Spacer(minLength: 8)
             BatteryLabel(state: model.battery)
         }
+        .padding(.horizontal, IslandDesign.expandedEar + 18)
+        .frame(height: IslandDesign.headerHeight)
     }
 
     @ViewBuilder
