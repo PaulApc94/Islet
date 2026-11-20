@@ -114,13 +114,15 @@ Pour mettre à jour, relance la même commande après un `git pull`.
   moins de chances de recouvrir celle d'une autre app. Les réglages restent à
   un clic droit sur l'île.
 - **Pour que l'icône voisine s'écarte quand l'île sort**, coche « Décaler
-  l'icône voisine quand l'île sort ». L'élément d'Islet dans la barre des menus
-  devient un espace vide : au repos il tient l'icône placée à sa gauche près
-  de l'encoche, et dès que l'île sort (lecture, bannière, ouverture) il se
-  retire et l'icône glisse vers la droite, puis revient. L'option remplace l'icône
-  d'Islet et « Éviter les icônes de la barre des menus », et demande elle aussi
+  l'icône voisine quand l'île sort ». L'icône d'Islet dans la barre des menus
+  se réduit à une petite capsule : au repos elle tient l'icône placée à sa
+  gauche près de l'encoche, et dès que l'île sort (lecture, bannière,
+  ouverture) elle se retire et l'icône voisine glisse vers la droite ; quand
+  l'île rentre, tout revient en place. Un clic sur la petite capsule ouvre les
+  réglages, comme l'icône habituelle. L'option remplace cette dernière et
+  « Éviter les icônes de la barre des menus », et demande elle aussi
   l'autorisation **Accessibilité** : Islet doit mesurer la place libre pour ne
-  pas pousser l'icône trop loin. Ses limites sont décrites plus bas.
+  pas pousser l'icône voisine trop loin. Ses limites sont décrites plus bas.
 - **Si l'icône a disparu** (tu l'as masquée, ou macOS cache derrière l'encoche
   les icônes qui ne tiennent pas dans la barre des menus) : fais un clic droit
   sur l'île, ou relance Islet depuis Spotlight. Le même menu s'ouvre.
@@ -154,8 +156,8 @@ Sources/Islet/
 ├── main.swift, AppDelegate.swift      démarrage, instance unique
 ├── IslandModel.swift                  l'état de l'île et la géométrie de chaque état
 ├── IslandWindowController.swift       le panneau transparent épinglé sur l'encoche
-├── StatusItemController.swift         l'icône (ou l'espace vide) et le menu de réglages
-├── MenuBarSpring.swift                l'espace vide qui pousse l'icône voisine
+├── StatusItemController.swift         l'icône (ou la petite capsule) et le menu de réglages
+├── MenuBarSpring.swift                la petite capsule qui pousse l'icône voisine
 ├── Models.swift, Settings.swift       types partagés, préférences
 ├── Services/
 │   ├── MenuBarProbe.swift             place libre autour de l'encoche (Accessibilité)
@@ -214,7 +216,7 @@ Quelques choix qui expliquent le comportement :
   icônes derrière « » et il n'y a plus rien à pousser. Les repères utilisés
   (écart entre deux éléments, marge près de l'encoche) ont été mesurés sur
   macOS 27 ; Islet se corrige d'après ce que la barre affiche réellement, et
-  retire son espace vide dès qu'une icône se retrouve derrière « ».
+  retire sa capsule dès qu'une icône se retrouve derrière « ».
 - Cette option a deux limites. Tant que `scripts/make-signing-identity.sh` n'a
   pas été lancé, l'app est signée « ad hoc » : sa signature change à chaque
   compilation, et macOS oublie l'autorisation Accessibilité à chaque mise à

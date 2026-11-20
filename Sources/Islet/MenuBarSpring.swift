@@ -5,8 +5,8 @@ import Combine
 ///
 /// macOS will not move another app's icon for anyone, but it lays the status
 /// items out from the right edge of the screen: when one of them gets wider,
-/// those on its left slide towards the notch. Islet's item, left blank, is that
-/// one. At rest it is wide, so its neighbour sits near the notch; when the
+/// those on its left slide towards the notch. Islet's item, shrunk to a small
+/// capsule, is that one. At rest it is wide, so its neighbour sits near the notch; when the
 /// island comes out it is taken away, and the neighbour slides to the right,
 /// out of the island's way. The travel is short: macOS hides an icon that
 /// comes too close to the notch.
@@ -21,7 +21,7 @@ enum MenuBarSpring {
     /// item further along that grows by a few points (a temperature gaining a
     /// digit moved the whole row by 6).
     static let margin: CGFloat = 33
-    /// A blank item pushes its neighbour by its own length plus the gap macOS
+    /// An item pushes its neighbour by its own length plus the gap macOS
     /// keeps between two items (14.5 to 16.5 points, as it rounds). The gap
     /// comes and goes with the item: that part of the move is a jump.
     static let gap: CGFloat = 15.5
@@ -47,7 +47,7 @@ enum MenuBarSpring {
     }
 }
 
-/// The blank item in the menu bar, as the spring drives it.
+/// Islet's item in the menu bar, as the spring drives it.
 @MainActor
 protocol MenuBarSpacer: AnyObject {
     /// The length the spacer has, or is animating to; `nil` when it is out of

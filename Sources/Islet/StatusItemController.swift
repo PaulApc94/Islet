@@ -73,13 +73,34 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     // MARK: Icon or spacer
 
-    /// The item is either Islet's icon, or a blank spacer that pushes the icon
-    /// on its left (see `MenuBarSpring`).
+    /// The item is either Islet's icon, or a spacer that pushes the icon on its
+    /// left (see `MenuBarSpring`). The spacer still shows the capsule, as small
+    /// as it is narrow: an item that takes room without showing anything looks
+    /// like a hole in the menu bar, and gives nothing to click.
     private var isSpacer = false
     private var spacerTimer: Timer?
     /// What the item really has right now, in the middle of an animation too.
     private var shownLength: CGFloat?
     private(set) var spacerLength: CGFloat?
+    private var pills: [Int: NSImage] = [:]
+
+    /// Islet's capsule drawn to fit a spacer of this length; nothing when the
+    /// spacer is too narrow to show a shape.
+    private func pill(forLength length: CGFloat) -> NSImage? {
+        let width = Int(min(length, 18) - 1)
+        guard width >= 3 else { return nil }
+        if let pill = pills[width] { return pill }
+        let size = CGSize(width: CGFloat(width), height: max(2, (CGFloat(width) * 0.54).rounded()))
+        let pill = NSImage(size: size, flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2).fill()
+            return true
+        }
+        pill.isTemplate = true
+        pill.accessibilityDescription = "Islet"
+        pills[width] = pill
+        return pill
+    }
 
     private func applyMode(spacer: Bool, icon: Bool) {
         spacerTimer?.invalidate()
@@ -104,6 +125,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private func show(_ length: CGFloat?) {
         shownLength = length
         if let length {
+            statusItem.button?.image = pill(forLength: length)
             // Length first, for the same reason as above.
             statusItem.length = length
             if !statusItem.isVisible { statusItem.isVisible = true }
