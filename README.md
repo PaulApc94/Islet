@@ -195,9 +195,10 @@ Quelques choix qui expliquent le comportement :
   autorisée une dernière fois, l'autorisation est conservée, sur ce Mac et tant
   que le certificat reste dans le trousseau (il est valable dix ans ; si la
   signature avec lui échoue, l'app est de nouveau signée « ad hoc » et
-  `./install.sh` le signale). Et seul le lecteur est ajusté : les bannières (volume,
-  charge, batterie, sortie audio), qui ne durent que quelques secondes, passent
-  encore par-dessus la barre.
+  `./install.sh` le signale). Et seul le lecteur compact est ajusté : l'île
+  ouverte, qui s'étend dans la barre de part et d'autre de l'encoche tant que le
+  pointeur est dessus, et les bannières (volume, charge, batterie, sortie
+  audio), qui ne durent que quelques secondes, passent encore par-dessus.
 - Développée et vérifiée sur un MacBook Pro 14" (puce Apple, macOS 27). La
   disposition sans encoche n'a été vérifiée qu'en simulation, et les Mac Intel
   n'ont pas été testés.

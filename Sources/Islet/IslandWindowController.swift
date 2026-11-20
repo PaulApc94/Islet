@@ -12,7 +12,6 @@ struct PointerZone: Equatable {
     static func classify(location: CGPoint,
                          screenFrame: CGRect,
                          hitSize: CGSize,
-                         neck: CGSize? = nil,
                          yieldZoneWidth: CGFloat,
                          stripHeight: CGFloat) -> PointerZone {
         // Both areas hang from the top centre of the screen. AppKit's mouse
@@ -22,14 +21,7 @@ struct PointerZone: Equatable {
         func area(width: CGFloat, height: CGFloat) -> CGRect {
             CGRect(x: screenFrame.midX - width / 2, y: screenFrame.maxY - height, width: width, height: height)
         }
-        var inside = NSMouseInRect(location, area(width: hitSize.width, height: hitSize.height), false)
-        // The open island only crosses the menu bar through its neck: the
-        // strip on either side belongs to the menu bar's own items.
-        if inside, let neck,
-           NSMouseInRect(location, area(width: hitSize.width, height: neck.height), false),
-           !NSMouseInRect(location, area(width: neck.width, height: neck.height), false) {
-            inside = false
-        }
+        let inside = NSMouseInRect(location, area(width: hitSize.width, height: hitSize.height), false)
         let beside = !inside && yieldZoneWidth > 0
             && NSMouseInRect(location, area(width: yieldZoneWidth, height: stripHeight), false)
         return PointerZone(inside: inside, beside: beside)
@@ -256,7 +248,6 @@ final class IslandWindowController {
         let zone = PointerZone.classify(location: NSEvent.mouseLocation,
                                         screenFrame: screenFrame,
                                         hitSize: model.hitSize,
-                                        neck: model.hitNeck,
                                         yieldZoneWidth: model.yieldZoneWidth,
                                         stripHeight: model.metrics.notchHeight)
         let inside = isPressingIsland || zone.inside

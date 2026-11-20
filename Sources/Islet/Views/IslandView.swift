@@ -8,10 +8,7 @@ struct IslandView: View {
 
     var body: some View {
         let layout = model.layout
-        let shape = NotchShape(topRadius: layout.topRadius,
-                               bottomRadius: layout.bottomRadius,
-                               neckWidth: layout.neckWidth,
-                               neckHeight: layout.neckHeight)
+        let shape = NotchShape(topRadius: layout.topRadius, bottomRadius: layout.bottomRadius)
 
         Color.clear
             .frame(width: layout.width, height: layout.height)

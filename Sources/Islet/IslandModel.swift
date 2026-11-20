@@ -11,12 +11,6 @@ struct IslandMetrics: Equatable {
     /// Height of the notch, or of the menu bar on notchless screens.
     var notchHeight: CGFloat
     var hasNotch: Bool
-    /// Height of the menu bar, which can be a little taller than the notch.
-    /// Zero when unknown (or auto-hidden): the notch's height is used then.
-    var menuBarHeight: CGFloat = 0
-
-    /// Height of the strip the open island's neck has to cross before it may widen.
-    var neckHeight: CGFloat { max(notchHeight, menuBarHeight) }
 
     static let placeholder = IslandMetrics(notchWidth: 185, notchHeight: 32, hasNotch: true)
 }
@@ -24,12 +18,10 @@ struct IslandMetrics: Equatable {
 extension IslandMetrics {
     init(screen: NSScreen) {
         let inset = screen.safeAreaInsets.top
-        let barHeight = max(0, screen.frame.maxY - screen.visibleFrame.maxY)
         if inset > 0, let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea {
             self.init(notchWidth: max(120, screen.frame.width - left.width - right.width),
                       notchHeight: inset,
-                      hasNotch: true,
-                      menuBarHeight: min(barHeight, inset + 12))
+                      hasNotch: true)
         } else {
             let menuBar = screen.frame.maxY - screen.visibleFrame.maxY
             self.init(notchWidth: 170, notchHeight: min(max(menuBar, 24), 40), hasNotch: false)
@@ -47,10 +39,6 @@ struct IslandLayout: Equatable {
     /// How far the island's centre sits from the notch's: non-zero only when
     /// its two wings have different widths.
     var offsetX: CGFloat = 0
-    /// Width and height of the part that crosses the menu bar when the island
-    /// is open (see `NotchShape`). Closed, the neck is the whole island.
-    var neckWidth: CGFloat = 0
-    var neckHeight: CGFloat = 0
 }
 
 enum IslandDesign {
@@ -82,8 +70,6 @@ enum IslandDesign {
     static let expandedWidth: CGFloat = 448
     static let playerHeight: CGFloat = 124
     static let dashboardHeight: CGFloat = 84
-    /// The row with the player's name and the battery, at the top of the open island.
-    static let headerHeight: CGFloat = 28
 }
 
 enum IslandAnimation {
@@ -311,17 +297,6 @@ final class IslandModel: ObservableObject {
     var layout: IslandLayout { layout(for: mode, hovering: isHovering) }
 
     func layout(for mode: IslandMode, hovering: Bool = false) -> IslandLayout {
-        var layout = baseLayout(for: mode, hovering: hovering)
-        if mode != .expanded {
-            // Closed, the neck is the island itself. Giving it the island's own
-            // width (rather than none) lets it narrow smoothly as the island opens.
-            layout.neckWidth = layout.width
-            layout.neckHeight = layout.height
-        }
-        return layout
-    }
-
-    private func baseLayout(for mode: IslandMode, hovering: Bool) -> IslandLayout {
         let notchWidth = metrics.notchWidth
         let notchHeight = metrics.notchHeight
         // Hovering makes the island swell slightly: feedback before it opens.
@@ -349,16 +324,14 @@ final class IslandModel: ObservableObject {
                                 bottomRadius: hud.hasCaption ? 16 : 10)
         case .expanded:
             let body = nowPlaying == nil ? IslandDesign.dashboardHeight : IslandDesign.playerHeight
-            // Open, the island crosses the menu bar behind the notch only and
-            // widens underneath it: the menus and icons beside the notch stay
-            // visible and clickable. macOS will not move them, so the island
-            // goes under them.
+            // Open, the island spreads from the notch into the menu bar on both
+            // sides, like the closed one, and its header (source app, battery)
+            // sits there. It lies over whatever the menu bar shows in that
+            // stretch for as long as the pointer stays on it.
             return IslandLayout(width: IslandDesign.expandedWidth,
-                                height: metrics.neckHeight + IslandDesign.headerHeight + body,
-                                topRadius: IslandDesign.ear,
-                                bottomRadius: 30,
-                                neckWidth: notchWidth,
-                                neckHeight: metrics.neckHeight)
+                                height: notchHeight + body,
+                                topRadius: IslandDesign.expandedEar,
+                                bottomRadius: 30)
         }
     }
 
@@ -386,14 +359,6 @@ final class IslandModel: ObservableObject {
             height = metrics.notchHeight
         }
         return CGSize(width: max(layout.width, metrics.notchWidth), height: max(height, 5))
-    }
-
-    /// Open, the island is a "T": its neck in the menu bar, its body below.
-    /// The menu bar beside the neck is not the island, whatever the overall
-    /// hit rectangle says. `nil` when the island is closed.
-    var hitNeck: CGSize? {
-        guard isExpanded else { return nil }
-        return CGSize(width: metrics.notchWidth, height: metrics.neckHeight)
     }
 
     /// Width of the menu bar strip, centred on the notch, in which the compact

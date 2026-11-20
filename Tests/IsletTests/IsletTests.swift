@@ -256,18 +256,31 @@ final class IslandModelTests {
         #expect(model.mode == .media)
     }
 
-    @Test("Open, the island crosses the menu bar behind the notch only, and widens below it")
-    func openIslandLeavesTheMenuBarAlone() {
-        model.metrics = IslandMetrics(notchWidth: 185, notchHeight: 32, hasNotch: true, menuBarHeight: 34)
-        let closed = model.layout(for: .media)
-        #expect(closed.neckWidth == closed.width, "closed, the neck is the island itself")
+    @Test("Out of the box the player has both wings, whatever the menu bar holds")
+    func playerHasBothWingsByDefault() {
+        #expect(!settings.fitToMenuBar, "fitting into the free room is opt-in")
+        model.receive(nowPlaying: song("A", playing: true))
+        clearBanner()
+        // Even a measurement saying there is no room changes nothing.
+        model.receive(menuBarRoom: MenuBarRoom(left: 10, right: 10))
+        #expect(model.mode == .media)
+        #expect(model.layout.width == notched.notchWidth + 2 * IslandDesign.mediaWing)
+        #expect(model.layout.offsetX == 0)
+    }
 
+    @Test("Open, the island takes the menu bar on both sides of the notch: it does not start below it")
+    func openIslandSpreadsBesideTheNotch() {
+        model.receive(nowPlaying: song("A", playing: true))
         model.setExpanded(true)
         let open = model.layout
-        #expect(open.neckWidth == 185)
-        #expect(open.neckHeight == 34, "the neck clears the whole menu bar, taller than the notch here")
-        #expect(open.width > open.neckWidth)
-        #expect(model.hitNeck == CGSize(width: 185, height: 34))
+        #expect(open.width == IslandDesign.expandedWidth)
+        #expect(open.width > notched.notchWidth + 2 * IslandDesign.mediaWing, "wider than the compact player")
+        // The header (source app, battery) is the menu bar row itself: the
+        // player comes right under the notch, with no extra row in between.
+        #expect(open.height == notched.notchHeight + IslandDesign.playerHeight)
+        // The whole of it is the island for the pointer, menu bar row included.
+        #expect(model.hitSize.width >= open.width)
+        #expect(model.hitSize.height >= open.height)
     }
 
     @Test("A banner's caption, below the menu bar, never counts as the island")
@@ -452,19 +465,20 @@ struct PointerZoneTests {
         #expect(zone(x: 0, fromTop: -1) == nowhere)
     }
 
-    @Test("Open, the menu bar beside the neck is not the island: its icons keep their clicks")
-    func openIslandNeck() {
-        let open = CGSize(width: 468, height: 200)
-        func zone(x: CGFloat, fromTop: CGFloat) -> Bool {
+    @Test("Open, all of the island is the island, the menu bar row beside the notch included")
+    func openIslandIsOnePiece() {
+        let open = CGSize(width: 468, height: 170)
+        func inside(x: CGFloat, fromTop: CGFloat) -> Bool {
             PointerZone.classify(location: CGPoint(x: screen.midX + x, y: screen.maxY - fromTop),
-                                 screenFrame: screen, hitSize: open, neck: CGSize(width: 185, height: 34),
+                                 screenFrame: screen, hitSize: open,
                                  yieldZoneWidth: 0, stripHeight: 32).inside
         }
-        #expect(zone(x: 0, fromTop: 16), "the neck, behind the notch")
-        #expect(!zone(x: 150, fromTop: 16), "a status icon beside the notch")
-        #expect(!zone(x: -150, fromTop: 33))
-        #expect(zone(x: 150, fromTop: 60), "the body, below the menu bar")
-        #expect(zone(x: 0, fromTop: 60))
+        #expect(inside(x: 0, fromTop: 16), "the notch")
+        #expect(inside(x: 150, fromTop: 16), "the header, right of the notch")
+        #expect(inside(x: -150, fromTop: 16), "the header, left of the notch")
+        #expect(inside(x: 150, fromTop: 100), "the player, below")
+        #expect(!inside(x: 260, fromTop: 16), "further along the menu bar")
+        #expect(!inside(x: 0, fromTop: 180), "below the island")
     }
 
     @Test("With no player beside the notch there is nothing to step aside from")
@@ -599,20 +613,21 @@ struct NotchShapeTests {
         #expect(frame.insetBy(dx: -0.01, dy: -0.01).contains(bounds))
     }
 
-    @Test("With a neck, the shape is a T: nothing is drawn in the menu bar beside the notch")
-    func neckLeavesTheMenuBarClear() {
-        let frame = CGRect(x: 0, y: 0, width: 448, height: 186)
-        let path = NotchShape(topRadius: 6, bottomRadius: 30, neckWidth: 185, neckHeight: 34).path(in: frame)
-        #expect(path.contains(CGPoint(x: 224, y: 10)), "the neck")
-        #expect(!path.contains(CGPoint(x: 40, y: 10)), "left of the neck, in the menu bar")
-        #expect(!path.contains(CGPoint(x: 408, y: 30)), "right of the neck, in the menu bar")
-        #expect(path.contains(CGPoint(x: 40, y: 80)), "the body")
-        #expect(path.contains(CGPoint(x: 408, y: 150)))
-        #expect(frame.insetBy(dx: -0.01, dy: -0.01).contains(path.boundingRect))
-        // Closed (the neck as wide as the frame), it is the plain notch shape again.
+    @Test("The open island is black beside the notch from the top edge down: one piece, not a T under the menu bar")
+    func openShapeFillsTheSidesOfTheNotch() {
+        // 448 wide around a 185 pt notch: the notch spans x = 131.5 ... 316.5.
+        let frame = CGRect(x: 0, y: 0, width: 448, height: 156)
+        let path = NotchShape(topRadius: 10, bottomRadius: 30).path(in: frame)
+        #expect(path.contains(CGPoint(x: 224, y: 10)), "behind the notch")
+        #expect(path.contains(CGPoint(x: 40, y: 10)), "left of the notch, in the menu bar")
+        #expect(path.contains(CGPoint(x: 408, y: 10)), "right of the notch, in the menu bar")
+        #expect(path.contains(CGPoint(x: 40, y: 80)), "the player, below")
+        #expect(path.contains(CGPoint(x: 408, y: 120)))
+        // The compact player too: both wings, at mid-height of the menu bar.
         let closed = CGRect(x: 0, y: 0, width: 273, height: 32)
-        let plain = NotchShape(topRadius: 6, bottomRadius: 10, neckWidth: 273, neckHeight: 32).path(in: closed)
-        #expect(plain.contains(CGPoint(x: 20, y: 16)))
+        let wings = NotchShape(topRadius: 6, bottomRadius: 10).path(in: closed)
+        #expect(wings.contains(CGPoint(x: 20, y: 16)))
+        #expect(wings.contains(CGPoint(x: 253, y: 16)))
     }
 
     @Test func emptyFrameDrawsNothing() {
