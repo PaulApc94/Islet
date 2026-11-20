@@ -120,10 +120,25 @@ final class MenuBarProbe {
             let room = MenuBarRoom.around(notch: geometry.notch,
                                           screenMinX: geometry.minX,
                                           screenMaxX: geometry.maxX,
-                                          items: items)
+                                          items: items.frames)
             DispatchQueue.main.async {
                 self.isMeasuring = false
-                if self.timer != nil { self.publish(room) }
+                guard self.timer != nil else { return }
+
+                if items.ownerFailed, self.failedReads < Self.maxRetries {
+                    // An app that just came to the front may not answer yet
+                    // (seen with the Finder). Its menus are unknown: assume
+                    // there is no room rather than draw over them, and ask
+                    // again in a moment instead of waiting for the timer.
+                    self.failedReads += 1
+                    self.publish(MenuBarRoom(left: 0, right: 0))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.refresh() }
+                } else {
+                    // After the retries, an app that never answers is taken to
+                    // have no menus: better than hiding the player for good.
+                    if !items.ownerFailed { self.failedReads = 0 }
+                    self.publish(room)
+                }
                 if self.needsAnotherPass {
                     self.needsAnotherPass = false
                     self.refresh()
@@ -131,6 +146,9 @@ final class MenuBarProbe {
             }
         }
     }
+
+    private var failedReads = 0
+    private static let maxRetries = 4
 
     private func publish(_ newRoom: MenuBarRoom?) {
         guard newRoom != room else { return }
@@ -161,21 +179,27 @@ final class MenuBarProbe {
     // MARK: Accessibility
 
     /// Frames of the frontmost app's menu titles and of every app's status icons.
-    nonisolated private static func menuBarItems(owner: pid_t?, pids: [pid_t]) -> [CGRect] {
+    nonisolated private static func menuBarItems(owner: pid_t?, pids: [pid_t]) -> (frames: [CGRect], ownerFailed: Bool) {
         var frames: [CGRect] = []
+        var ownerFailed = false
         if let owner {
-            frames += itemFrames(of: owner, bar: kAXMenuBarAttribute)
+            // The one answer that matters most: give it more time.
+            let titles = itemFrames(of: owner, bar: kAXMenuBarAttribute, timeout: 1)
+            // Every app has at least the Apple menu and its own: none at all
+            // means the app did not answer.
+            ownerFailed = titles.isEmpty
+            frames += titles
         }
         for pid in pids {
-            frames += itemFrames(of: pid, bar: kAXExtrasMenuBarAttribute)
+            frames += itemFrames(of: pid, bar: kAXExtrasMenuBarAttribute, timeout: 0.25)
         }
-        return frames
+        return (frames, ownerFailed)
     }
 
-    nonisolated private static func itemFrames(of pid: pid_t, bar attribute: String) -> [CGRect] {
+    nonisolated private static func itemFrames(of pid: pid_t, bar attribute: String, timeout: Float) -> [CGRect] {
         let app = AXUIElementCreateApplication(pid)
         // An app that does not answer must not hold the whole measurement up.
-        AXUIElementSetMessagingTimeout(app, 0.25)
+        AXUIElementSetMessagingTimeout(app, timeout)
         guard let bar = value(of: app, attribute), CFGetTypeID(bar) == AXUIElementGetTypeID(),
               let children = value(of: bar as! AXUIElement, kAXChildrenAttribute) as? [AnyObject] else { return [] }
         return children.compactMap { child in
