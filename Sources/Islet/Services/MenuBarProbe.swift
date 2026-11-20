@@ -119,10 +119,10 @@ final class MenuBarProbe {
         let menuOwner = NSWorkspace.shared.menuBarOwningApplication?.processIdentifier
         let owner = menuOwner == me ? nil : menuOwner
         let pids = NSWorkspace.shared.runningApplications.map(\.processIdentifier).filter { $0 != me }
-        let ownIcons = NSApp.windows.filter { $0.className.contains("StatusBar") }.map { window in
-            CGRect(x: window.frame.minX, y: geometry.primaryMaxY - window.frame.maxY,
-                   width: window.frame.width, height: window.frame.height)
-        }
+        // (Asked through the same API as the other apps' icons, but from the
+        // main thread: the icon's window is several points wider than the icon,
+        // and measuring it instead cost the player a wing it had room for.)
+        let ownIcons = Self.itemFrames(of: me, bar: kAXExtrasMenuBarAttribute, timeout: 0.25)
         // Off the main thread: every app is asked, and a busy one may take a while to answer.
         queue.async {
             let items = Self.menuBarItems(owner: owner, pids: pids)
@@ -173,7 +173,7 @@ final class MenuBarProbe {
 
     /// The notch in the window server's space, the one Accessibility speaks:
     /// origin at the top-left corner of the primary display, y downwards.
-    private static func notchGeometry() -> (notch: CGRect, minX: CGFloat, maxX: CGFloat, primaryMaxY: CGFloat)? {
+    private static func notchGeometry() -> (notch: CGRect, minX: CGFloat, maxX: CGFloat)? {
         guard let primary = NSScreen.screens.first,
               let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }),
               let left = screen.auxiliaryTopLeftArea,
@@ -182,7 +182,7 @@ final class MenuBarProbe {
                            y: primary.frame.maxY - screen.frame.maxY,
                            width: screen.frame.width - left.width - right.width,
                            height: screen.safeAreaInsets.top)
-        return (notch, screen.frame.minX, screen.frame.maxX, primary.frame.maxY)
+        return (notch, screen.frame.minX, screen.frame.maxX)
     }
 
     // MARK: Accessibility
