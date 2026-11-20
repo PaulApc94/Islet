@@ -36,6 +36,9 @@ struct IslandLayout: Equatable {
     var height: CGFloat
     var topRadius: CGFloat
     var bottomRadius: CGFloat
+    /// How far the island's centre sits from the notch's: non-zero only when
+    /// its two wings have different widths.
+    var offsetX: CGFloat = 0
 }
 
 enum IslandDesign {
@@ -45,6 +48,23 @@ enum IslandDesign {
     static let expandedEar: CGFloat = 10
     /// Width of each side of the notch while music plays, ear included.
     static let mediaWing: CGFloat = 44
+    /// A single wing wide enough for the cover and the bars together.
+    static let wideMediaWing: CGFloat = 72
+
+    /// The compact player's wings when it must fit into the free room beside
+    /// the notch: both when both fit, otherwise one (wide if it can be), or
+    /// none at all. A wing never touches its neighbour: it needs a small gap.
+    static func fitWings(into room: MenuBarRoom) -> (left: CGFloat, right: CGFloat) {
+        let gap: CGFloat = 4
+        let leftFits = room.left >= mediaWing + gap
+        let rightFits = room.right >= mediaWing + gap
+        switch (leftFits, rightFits) {
+        case (true, true): return (mediaWing, mediaWing)
+        case (true, false): return (room.left >= wideMediaWing + gap ? wideMediaWing : mediaWing, 0)
+        case (false, true): return (0, room.right >= wideMediaWing + gap ? wideMediaWing : mediaWing)
+        case (false, false): return (0, 0)
+        }
+    }
     /// Height of the text line some banners add under the notch.
     static let captionHeight: CGFloat = 32
     static let expandedWidth: CGFloat = 448
@@ -163,9 +183,24 @@ final class IslandModel: ObservableObject {
     /// or a player that briefly reports nothing, must not fool them.
     private var lastPlayingTrackID: String?
     private var settingsObservation: AnyCancellable?
+    private var fitObservation: AnyCancellable?
+
+    /// The free room beside the notch, when the user lets Islet measure it.
+    @Published private(set) var menuBarRoom: MenuBarRoom?
+    private let menuBarProbe = MenuBarProbe()
+    private var isStarted = false
 
     init(settings: Settings = .shared) {
         self.settings = settings
+        fitObservation = settings.$fitToMenuBar
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                MainActor.assumeIsolated {
+                    guard let self, self.isStarted else { return }
+                    if enabled { self.menuBarProbe.start() } else { self.menuBarProbe.stop() }
+                }
+            }
         // `@Published` emits before storing the new value: use the one emitted.
         settingsObservation = settings.$showNowPlaying
             .dropFirst()
@@ -185,9 +220,38 @@ final class IslandModel: ObservableObject {
         battery = batteryService.state
         audioService.start()
         nowPlayingService.start()
+
+        menuBarProbe.onChange = { [weak self] room in self?.receive(menuBarRoom: room) }
+        isStarted = true
+        if settings.fitToMenuBar {
+            // macOS forgets the permission of a locally signed app at every
+            // update: ask again rather than leave the option silently idle.
+            if !MenuBarProbe.isTrusted { MenuBarProbe.requestPermission() }
+            menuBarProbe.start()
+        }
+    }
+
+    /// Internal rather than private so the tests can feed measurements in.
+    func receive(menuBarRoom room: MenuBarRoom?) {
+        withAnimation(IslandAnimation.morph) { menuBarRoom = room }
+    }
+
+    /// Width of the compact player's wing on each side of the notch: the
+    /// standard pair, unless Islet knows the room and has to fit into it.
+    var mediaWings: (left: CGFloat, right: CGFloat) {
+        guard settings.fitToMenuBar, metrics.hasNotch, let menuBarRoom else {
+            return (IslandDesign.mediaWing, IslandDesign.mediaWing)
+        }
+        return IslandDesign.fitWings(into: menuBarRoom)
+    }
+
+    private var hasBothMediaWings: Bool {
+        let wings = mediaWings
+        return wings.left == IslandDesign.mediaWing && wings.right == IslandDesign.mediaWing
     }
 
     func stop() {
+        menuBarProbe.stop()
         nowPlayingService.stop()
         audioService.stop()
         batteryService.stop()
@@ -208,7 +272,10 @@ final class IslandModel: ObservableObject {
     /// What the closed island shows when the pointer is not beside it.
     private var restingMode: IslandMode {
         if let hud { return .hud(hud) }
-        if showsMedia, nowPlaying != nil { return .media }
+        // With no room on either side there is nowhere to show the player:
+        // the island stays behind the notch, and still opens on hover.
+        let wings = mediaWings
+        if showsMedia, nowPlaying != nil, wings.left + wings.right > 0 { return .media }
         return .idle
     }
 
@@ -235,10 +302,12 @@ final class IslandModel: ObservableObject {
                                 topRadius: IslandDesign.ear,
                                 bottomRadius: 10 + 3 * bump)
         case .media:
-            return IslandLayout(width: notchWidth + 2 * IslandDesign.mediaWing + 10 * bump,
+            let wings = mediaWings
+            return IslandLayout(width: notchWidth + wings.left + wings.right + 10 * bump,
                                 height: notchHeight + 4 * bump,
                                 topRadius: IslandDesign.ear,
-                                bottomRadius: 10 + 2 * bump)
+                                bottomRadius: 10 + 2 * bump,
+                                offsetX: (wings.right - wings.left) / 2)
         case .hud(let hud):
             return IslandLayout(width: notchWidth + 2 * hud.wing,
                                 height: notchHeight + (hud.hasCaption ? IslandDesign.captionHeight : 0),
@@ -286,6 +355,9 @@ final class IslandModel: ObservableObject {
     /// is the island itself and hiding it would leave nothing to click.
     var yieldZoneWidth: CGFloat {
         guard metrics.hasNotch, !isExpanded, showsMedia, nowPlaying != nil else { return 0 }
+        // When the player is fitted into the free room it covers nothing:
+        // there is nothing to step aside from.
+        if settings.fitToMenuBar, menuBarRoom != nil { return 0 }
         // Measured on the player's own layout, not on what the island shows
         // right now: otherwise the zone would vanish under the pointer as soon
         // as the island stepped aside, and the wings would come straight back.
@@ -409,7 +481,9 @@ final class IslandModel: ObservableObject {
             if !showsMedia {
                 withAnimation(IslandAnimation.morph) { showsMedia = true }
             }
-            if snapshot.trackID != lastPlayingTrackID, settings.showTrackChanges {
+            // The announcement spreads over both wings: skipped when the
+            // player had to give one up to fit beside the notch.
+            if snapshot.trackID != lastPlayingTrackID, settings.showTrackChanges, hasBothMediaWings {
                 present(.track, for: 2.8)
             }
             lastPlayingTrackID = snapshot.trackID

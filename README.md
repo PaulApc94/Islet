@@ -93,6 +93,14 @@ Pour mettre à jour, relance la même commande après un `git pull`.
 - **Les réglages** sont dans l'icône en forme de capsule de la barre des menus :
   activer ou non chaque activité (dont la musique), ouvrir au survol ou
   seulement au clic, retour haptique, lancement au démarrage du Mac, quitter.
+- **Pour que le lecteur ne recouvre jamais un menu ou une icône**, coche
+  « Éviter les icônes de la barre des menus » dans les réglages. Islet mesure
+  alors la place libre de chaque côté de l'encoche et n'y étend le lecteur que
+  s'il tient : des deux côtés, d'un seul (pochette et barres ensemble s'il y a
+  la place), ou pas du tout. Cela demande l'autorisation **Accessibilité**
+  (Réglages Système → Confidentialité et sécurité → Accessibilité) : c'est le
+  seul moyen qu'offre macOS de savoir où sont les éléments de la barre. Islet ne
+  s'en sert que pour lire leur position.
 - **Si l'icône a disparu** (macOS cache derrière l'encoche les icônes qui ne
   tiennent pas dans la barre des menus) : fais un clic droit sur l'île, ou
   relance Islet depuis Spotlight. Le même menu s'ouvre.
@@ -168,10 +176,15 @@ Quelques choix qui expliquent le comportement :
   donne aux apps aucun moyen de les déplacer, ni même de savoir où ils sont sans
   l'autorisation Accessibilité. Pendant la lecture, l'île déborde d'environ 44
   points de chaque côté de l'encoche et peut donc masquer le menu ou l'icône
-  voisin. Islet fait ce qui reste possible : elle se replie dès que le pointeur
-  s'en approche. Si cela te gêne encore, décoche « Musique en direct » dans les
-  réglages : l'île reste cachée derrière l'encoche et s'ouvre toujours au
-  survol.
+  voisin. Islet fait ce qui reste possible : par défaut elle se replie dès que
+  le pointeur s'en approche, et avec l'option « Éviter les icônes de la barre
+  des menus » elle ne s'étend que là où il y a de la place.
+- Cette option a deux limites. L'app étant signée localement, macOS oublie
+  l'autorisation Accessibilité à chaque mise à jour : il faut alors retirer
+  Islet de la liste dans Réglages Système, puis l'autoriser de nouveau. Et
+  seul le lecteur est ajusté : les bannières (volume, charge, batterie, sortie
+  audio), qui ne durent que quelques secondes, passent encore par-dessus la
+  barre.
 - Développée et vérifiée sur un MacBook Pro 14" (puce Apple, macOS 27). La
   disposition sans encoche n'a été vérifiée qu'en simulation, et les Mac Intel
   n'ont pas été testés.

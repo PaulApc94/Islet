@@ -80,6 +80,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(toggle(L10n.t("Sortie audio", "Audio Output"), \.showAudioOutput))
         menu.addItem(.separator())
 
+        menu.addItem(fitItem())
         menu.addItem(toggle(L10n.t("Ouvrir au survol", "Expand on Hover"), \.expandOnHover))
         menu.addItem(toggle(L10n.t("Retour haptique", "Haptic Feedback"), \.haptics))
         menu.addItem(loginItem())
@@ -108,6 +109,34 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func toggleSetting(_ sender: NSMenuItem) {
         guard let keyPath = sender.representedObject as? ReferenceWritableKeyPath<Settings, Bool> else { return }
         settings[keyPath: keyPath].toggle()
+    }
+
+    // MARK: Fitting into the menu bar
+
+    /// On, off, or "on but macOS has not allowed it yet" (a dash): fitting the
+    /// player into the free room needs the Accessibility permission.
+    private func fitItem() -> NSMenuItem {
+        let waiting = settings.fitToMenuBar && !MenuBarProbe.isTrusted
+        let title = waiting
+            ? L10n.t("Éviter les icônes de la barre des menus (à autoriser dans Réglages)…",
+                     "Avoid Menu Bar Items (allow in System Settings)…")
+            : L10n.t("Éviter les icônes de la barre des menus", "Avoid Menu Bar Items")
+        let item = NSMenuItem(title: title, action: #selector(toggleFit), keyEquivalent: "")
+        item.target = self
+        item.state = settings.fitToMenuBar ? (waiting ? .mixed : .on) : .off
+        return item
+    }
+
+    @objc private func toggleFit() {
+        if settings.fitToMenuBar, !MenuBarProbe.isTrusted {
+            // Already asked for: take the user to the switch itself.
+            MenuBarProbe.openAccessibilitySettings()
+            return
+        }
+        settings.fitToMenuBar.toggle()
+        if settings.fitToMenuBar, !MenuBarProbe.isTrusted {
+            MenuBarProbe.requestPermission()
+        }
     }
 
     // MARK: Launch at login

@@ -245,3 +245,15 @@ ${BOLD}$APP_NAME est installée :${RESET} $INSTALLED_APP
   • Les réglages : l'icône $APP_NAME de la barre des menus, ou un clic droit sur l'îlot.
   • Pour mettre à jour : relancez ./install.sh    Pour désinstaller : ./uninstall.sh
 EOF
+
+# macOS ties the Accessibility permission to the exact build of a locally
+# signed app, so an update silently loses it: say so when the option is on.
+if [ "$(defaults read "$BUNDLE_ID" fitToMenuBar 2>/dev/null || true)" = "1" ]; then
+    cat <<EOF
+
+  ${BOLD}« Éviter les icônes de la barre des menus » est activé.${RESET} macOS oublie
+  l'autorisation Accessibilité à chaque mise à jour : dans Réglages Système →
+  Confidentialité et sécurité → Accessibilité, retirez $APP_NAME de la liste
+  (bouton –), puis autorisez-la de nouveau quand elle le demande.
+EOF
+fi

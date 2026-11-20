@@ -38,21 +38,52 @@ struct CompactMediaView: View {
     let nowPlaying: NowPlaying
     let metrics: IslandMetrics
     let showsCaption: Bool
+    /// Width of the wing on each side of the notch. Normally both the same;
+    /// when the player is fitted into the free room of the menu bar, one may
+    /// be missing, and the other then carries the cover (and the bars if wide).
+    var wings: (left: CGFloat, right: CGFloat) = (IslandDesign.mediaWing, IslandDesign.mediaWing)
     let namespace: Namespace.ID
 
     var body: some View {
         let side = min(metrics.notchHeight - 10, 24)
+        // Effect before the fixed frame, as in the expanded player: the cover
+        // morphs between the two sizes instead of sliding.
+        let cover = ArtworkView(nowPlaying: nowPlaying, cornerRadius: side * 0.27)
+            .matchedGeometryEffect(id: ArtworkView.geometryID, in: namespace)
+            .frame(width: side, height: side)
+        let bars = SpectrumView(color: nowPlaying.accent ?? .white, isPlaying: nowPlaying.isPlaying)
+            .frame(width: 18, height: 14)
+        let edge = IslandDesign.ear + 8
+        let isWide = max(wings.left, wings.right) > IslandDesign.mediaWing
+
         VStack(spacing: 0) {
-            WingRow(metrics: metrics, wing: IslandDesign.mediaWing) {
-                // Effect before the fixed frame, as in the expanded player: the
-                // cover morphs between the two sizes instead of sliding.
-                ArtworkView(nowPlaying: nowPlaying, cornerRadius: side * 0.27)
-                    .matchedGeometryEffect(id: ArtworkView.geometryID, in: namespace)
-                    .frame(width: side, height: side)
-            } trailing: {
-                SpectrumView(color: nowPlaying.accent ?? .white, isPlaying: nowPlaying.isPlaying)
-                    .frame(width: 18, height: 14)
+            HStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    if wings.left > 0 {
+                        cover
+                        if wings.right == 0, isWide { bars }
+                    }
+                }
+                .padding(.leading, edge)
+                .frame(width: wings.left, alignment: .leading)
+
+                Color.clear
+                    .frame(width: metrics.notchWidth)
+
+                HStack(spacing: 8) {
+                    if wings.right > 0 {
+                        if wings.left > 0 {
+                            bars
+                        } else {
+                            if isWide { bars }
+                            cover
+                        }
+                    }
+                }
+                .padding(.trailing, edge)
+                .frame(width: wings.right, alignment: .trailing)
             }
+            .frame(height: metrics.notchHeight)
 
             if showsCaption {
                 caption

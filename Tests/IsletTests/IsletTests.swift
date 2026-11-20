@@ -195,6 +195,58 @@ final class IslandModelTests {
         #expect(model.mode == .media)
     }
 
+    @Test("Fitted into the menu bar, the player takes only the sides where there is room")
+    func playerFitsIntoTheFreeRoom() {
+        settings.fitToMenuBar = true
+        model.receive(nowPlaying: song("A", playing: true))
+        clearBanner()
+        let wing = IslandDesign.mediaWing, wide = IslandDesign.wideMediaWing
+
+        model.receive(menuBarRoom: MenuBarRoom(left: 200, right: 200))
+        #expect(model.layout.width == notched.notchWidth + 2 * wing)
+        #expect(model.layout.offsetX == 0)
+
+        // Something sits right next to the notch on the right: one wide wing on the left.
+        model.receive(menuBarRoom: MenuBarRoom(left: 200, right: 10))
+        #expect(model.mediaWings.left == wide && model.mediaWings.right == 0)
+        #expect(model.layout.width == notched.notchWidth + wide)
+        #expect(model.layout.offsetX == -wide / 2, "the island leans to the free side, its notch part stays put")
+
+        // Room for the cover only.
+        model.receive(menuBarRoom: MenuBarRoom(left: 10, right: 60))
+        #expect(model.mediaWings.left == 0 && model.mediaWings.right == wing)
+        #expect(model.layout.offsetX == wing / 2)
+
+        // No room at all: the island stays behind the notch.
+        model.receive(menuBarRoom: MenuBarRoom(left: 10, right: 10))
+        #expect(model.mode == .idle)
+        #expect(model.layout.width == notched.notchWidth)
+
+        // Fitted, the player covers nothing: there is nothing to step aside from.
+        model.receive(menuBarRoom: MenuBarRoom(left: 200, right: 200))
+        #expect(model.yieldZoneWidth == 0)
+    }
+
+    @Test("A wing needs a gap from its neighbour, and the room is ignored when the option is off")
+    func fittingEdges() {
+        let wing = IslandDesign.mediaWing
+        #expect(IslandDesign.fitWings(into: MenuBarRoom(left: wing + 3, right: wing + 4)).left == 0)
+        #expect(IslandDesign.fitWings(into: MenuBarRoom(left: wing + 3, right: wing + 4)).right == wing)
+
+        model.receive(nowPlaying: song("A", playing: true))
+        model.receive(menuBarRoom: MenuBarRoom(left: 0, right: 0))
+        #expect(model.mediaWings.left == wing && model.mediaWings.right == wing)
+    }
+
+    @Test("The track announcement needs both wings: it is skipped when one is missing")
+    func noAnnouncementWithoutBothWings() {
+        settings.fitToMenuBar = true
+        model.receive(menuBarRoom: MenuBarRoom(left: 200, right: 10))
+        model.receive(nowPlaying: song("A", playing: true))
+        #expect(model.hud == nil)
+        #expect(model.mode == .media)
+    }
+
     @Test("A banner's caption, below the menu bar, never counts as the island")
     func captionIsNotPartOfTheHitArea() {
         model.present(.output(AudioOutput(name: "AirPods", symbolName: "airpods")), for: 10)
@@ -380,6 +432,41 @@ struct PointerZoneTests {
     @Test("With no player beside the notch there is nothing to step aside from")
     func noStripWithoutWings() {
         #expect(zone(x: 120, fromTop: 16, strip: 0) == PointerZone(inside: false, beside: false))
+    }
+}
+
+// MARK: - Menu bar room
+
+@Suite("Menu bar room")
+struct MenuBarRoomTests {
+    // Window-server space: y grows downwards from the top of the screen.
+    private let notch = CGRect(x: 663.5, y: 0, width: 185, height: 32)
+
+    private func room(_ items: [CGRect]) -> MenuBarRoom {
+        MenuBarRoom.around(notch: notch, screenMinX: 0, screenMaxX: 1512, items: items)
+    }
+
+    private func item(from minX: CGFloat, to maxX: CGFloat, y: CGFloat = 0) -> CGRect {
+        CGRect(x: minX, y: y, width: maxX - minX, height: 33)
+    }
+
+    @Test("An empty menu bar is free up to the screen edges")
+    func emptyBar() {
+        #expect(room([]) == MenuBarRoom(left: 663.5, right: 663.5))
+    }
+
+    @Test("The nearest menu title on the left and the nearest item on the right set the room")
+    func nearestItemsCount() {
+        let measured = room([item(from: 0, to: 300), item(from: 540, to: 600),
+                             item(from: 860, to: 915), item(from: 1200, to: 1512)])
+        #expect(measured == MenuBarRoom(left: 63.5, right: 11.5))
+    }
+
+    @Test("An item macOS tucked behind the notch leaves no room; items elsewhere do not count")
+    func hiddenAndForeignItems() {
+        #expect(room([item(from: 800, to: 870)]).right == 0)
+        // On another display (far right), or in a window below the menu bar.
+        #expect(room([item(from: 1600, to: 1700), item(from: 700, to: 900, y: 200)]) == room([]))
     }
 }
 

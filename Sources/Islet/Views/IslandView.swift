@@ -24,6 +24,8 @@ struct IslandView: View {
             }
             .contentShape(shape)
             .onTapGesture { model.islandClicked() }
+            // Wings of different widths shift the island's centre off the notch's.
+            .offset(x: layout.offsetX)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
@@ -36,6 +38,7 @@ struct IslandView: View {
             CompactMediaView(nowPlaying: nowPlaying,
                              metrics: model.metrics,
                              showsCaption: model.mode == .hud(.track),
+                             wings: model.mediaWings,
                              namespace: namespace)
                 .transition(.islandContent)
         } else if case .hud(let hud) = model.mode {
