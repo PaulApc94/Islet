@@ -113,6 +113,14 @@ Pour mettre à jour, relance la même commande après un `git pull`.
   barre des menus » : Islet retire sa propre icône, et le lecteur a d'autant
   moins de chances de recouvrir celle d'une autre app. Les réglages restent à
   un clic droit sur l'île.
+- **Pour que l'icône voisine s'écarte quand l'île sort**, coche « Décaler
+  l'icône voisine quand l'île sort ». L'élément d'Islet dans la barre des menus
+  devient un espace vide : au repos il tient l'icône placée à sa gauche près
+  de l'encoche, et dès que l'île sort (lecture, bannière, ouverture) il se
+  retire et l'icône glisse vers la droite, puis revient. L'option remplace l'icône
+  d'Islet et « Éviter les icônes de la barre des menus », et demande elle aussi
+  l'autorisation **Accessibilité** : Islet doit mesurer la place libre pour ne
+  pas pousser l'icône trop loin. Ses limites sont décrites plus bas.
 - **Si l'icône a disparu** (tu l'as masquée, ou macOS cache derrière l'encoche
   les icônes qui ne tiennent pas dans la barre des menus) : fais un clic droit
   sur l'île, ou relance Islet depuis Spotlight. Le même menu s'ouvre.
@@ -146,9 +154,11 @@ Sources/Islet/
 ├── main.swift, AppDelegate.swift      démarrage, instance unique
 ├── IslandModel.swift                  l'état de l'île et la géométrie de chaque état
 ├── IslandWindowController.swift       le panneau transparent épinglé sur l'encoche
-├── StatusItemController.swift         l'icône et le menu de réglages
+├── StatusItemController.swift         l'icône (ou l'espace vide) et le menu de réglages
+├── MenuBarSpring.swift                l'espace vide qui pousse l'icône voisine
 ├── Models.swift, Settings.swift       types partagés, préférences
 ├── Services/
+│   ├── MenuBarProbe.swift             place libre autour de l'encoche (Accessibilité)
 │   ├── NowPlayingService.swift        lecture en cours (voir ci-dessous)
 │   ├── AudioService.swift             volume et sortie audio (CoreAudio)
 │   └── BatteryService.swift           batterie et chargeur (IOKit)
@@ -191,6 +201,20 @@ Quelques choix qui expliquent le comportement :
   voisin. Islet fait ce qui reste possible : par défaut elle se replie dès que
   le pointeur s'en approche, et avec l'option « Éviter les icônes de la barre
   des menus » elle ne s'étend que là où il y a de la place.
+- **« Décaler l'icône voisine » ne déplace qu'une partie de la barre.** macOS
+  range les icônes depuis le bord droit de l'écran : quand l'une s'élargit,
+  celles qui sont à sa gauche glissent vers l'encoche. Islet ne peut donc
+  pousser que ce qui se trouve à gauche de son propre élément (maintiens ⌘ et
+  fais-le glisser plus à droite pour en pousser davantage), et de peu : macOS
+  range derrière son bouton « » toute icône qui s'approche à moins de 27 points
+  de l'encoche, si bien que sur une barre bien remplie la course est d'une
+  vingtaine de points. C'est assez pour dégager le lecteur compact ; l'île
+  ouverte, plus large, passe encore par-dessus. Quand les menus de l'app au
+  premier plan font le tour de l'encoche (Chrome), macOS range lui-même ces
+  icônes derrière « » et il n'y a plus rien à pousser. Les repères utilisés
+  (écart entre deux éléments, marge près de l'encoche) ont été mesurés sur
+  macOS 27 ; Islet se corrige d'après ce que la barre affiche réellement, et
+  retire son espace vide dès qu'une icône se retrouve derrière « ».
 - Cette option a deux limites. Tant que `scripts/make-signing-identity.sh` n'a
   pas été lancé, l'app est signée « ad hoc » : sa signature change à chaque
   compilation, et macOS oublie l'autorisation Accessibilité à chaque mise à

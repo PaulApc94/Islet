@@ -14,8 +14,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// The app the user was working in before Islet's menu took the keyboard.
     private var lastOtherApp: NSRunningApplication?
     private var activationObserver: NSObjectProtocol?
-    private var iconObservation: AnyCancellable?
+    private var modeObservation: AnyCancellable?
     private var visibilityObservation: NSKeyValueObservation?
+    private var iconImage: NSImage?
 
     init(settings: Settings) {
         self.settings = settings
@@ -41,31 +42,73 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             let image = NSImage(systemSymbolName: "capsule.fill", accessibilityDescription: "Islet")?
                 .withSymbolConfiguration(configuration)
             image?.isTemplate = true
+            iconImage = image
             button.image = image
         }
 
         menu.delegate = self
         statusItem.menu = menu
 
-        statusItem.isVisible = settings.showMenuBarIcon
-        // `@Published` emits before storing the new value: use the one emitted.
-        iconObservation = settings.$showMenuBarIcon
+        applyMode(spacer: settings.pushMenuBarIcons, icon: settings.showMenuBarIcon)
+        // `@Published` emits before storing the new value: use the ones emitted.
+        modeObservation = settings.$pushMenuBarIcons.combineLatest(settings.$showMenuBarIcon)
             .dropFirst()
-            .removeDuplicates()
-            .sink { [weak self] visible in
-                MainActor.assumeIsolated { self?.statusItem.isVisible = visible }
+            .removeDuplicates { $0 == $1 }
+            .sink { [weak self] spacer, icon in
+                MainActor.assumeIsolated { self?.applyMode(spacer: spacer, icon: icon) }
             }
         // The other way round: the icon can also be dragged out of the menu
         // bar (Command-drag). The setting follows, or the icon would be back
-        // at the next launch.
+        // at the next launch. (Not the spacer: its coming and going is ours.)
         visibilityObservation = statusItem.observe(\.isVisible, options: [.new]) { [weak self] _, change in
             guard let visible = change.newValue else { return }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self, self.settings.showMenuBarIcon != visible else { return }
+                    guard let self, !self.isSpacer, self.settings.showMenuBarIcon != visible else { return }
                     self.settings.showMenuBarIcon = visible
                 }
             }
+        }
+    }
+
+    // MARK: Icon or spacer
+
+    /// The item is either Islet's icon, or a blank spacer that pushes the icon
+    /// on its left (see `MenuBarSpring`).
+    private var isSpacer = false
+    private var spacerTimer: Timer?
+    /// What the item really has right now, in the middle of an animation too.
+    private var shownLength: CGFloat?
+    private(set) var spacerLength: CGFloat?
+
+    private func applyMode(spacer: Bool, icon: Bool) {
+        spacerTimer?.invalidate()
+        spacerTimer = nil
+        spacerLength = nil
+        shownLength = nil
+        isSpacer = spacer
+        if spacer {
+            // Out of the menu bar until the spring knows the room. Sized while
+            // it is out: an item that appears with its old width is, for one
+            // layout pass, too wide for its place.
+            statusItem.isVisible = false
+            statusItem.button?.image = nil
+            statusItem.length = MenuBarSpring.minimumLength
+        } else {
+            statusItem.button?.image = iconImage
+            statusItem.length = NSStatusItem.squareLength
+            statusItem.isVisible = icon
+        }
+    }
+
+    private func show(_ length: CGFloat?) {
+        shownLength = length
+        if let length {
+            // Length first, for the same reason as above.
+            statusItem.length = length
+            if !statusItem.isVisible { statusItem.isVisible = true }
+        } else if statusItem.isVisible {
+            statusItem.isVisible = false
         }
     }
 
@@ -109,6 +152,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(toggle(L10n.t("Ouvrir au survol", "Expand on Hover"), \.expandOnHover))
         menu.addItem(toggle(L10n.t("Retour haptique", "Haptic Feedback"), \.haptics))
         menu.addItem(toggle(L10n.t("Icône dans la barre des menus", "Menu Bar Icon"), \.showMenuBarIcon))
+        menu.addItem(pushItem())
         menu.addItem(loginItem())
         menu.addItem(.separator())
 
@@ -163,6 +207,29 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
     }
 
+    // MARK: Pushing the neighbouring icon
+
+    /// Like fitting, it needs to know where the menu bar's items are, hence the
+    /// same three states.
+    private func pushItem() -> NSMenuItem {
+        let waiting = settings.pushMenuBarIcons && !MenuBarProbe.isTrusted
+        let title = waiting
+            ? L10n.t("Décaler l'icône voisine quand l'île sort (à autoriser dans Réglages)…",
+                     "Move the Next Icon Aside (allow in System Settings)…")
+            : L10n.t("Décaler l'icône voisine quand l'île sort", "Move the Next Icon Aside")
+        let item = NSMenuItem(title: title, action: #selector(togglePush), keyEquivalent: "")
+        item.target = self
+        item.state = settings.pushMenuBarIcons ? (waiting ? .mixed : .on) : .off
+        return item
+    }
+
+    @objc private func togglePush() {
+        settings.pushMenuBarIcons.toggle()
+        if settings.pushMenuBarIcons, !MenuBarProbe.isTrusted {
+            MenuBarProbe.requestPermission()
+        }
+    }
+
     // MARK: Launch at login
 
     private func loginItem() -> NSMenuItem {
@@ -201,5 +268,45 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 NSSound.beep()
             }
         }
+    }
+}
+
+// MARK: - Spacer
+
+extension StatusItemController: MenuBarSpacer {
+    private static let spacerAnimation: TimeInterval = 0.25
+
+    /// Only the length can be animated: the gap macOS adds beside the item
+    /// comes and goes with it, in one step. So the spacer shrinks faster and
+    /// faster and is then taken out, or is put in narrow and widens ever more
+    /// slowly: the jump falls where the neighbour moves fastest.
+    func setSpacer(length target: CGFloat?) {
+        guard isSpacer else { return }
+        spacerTimer?.invalidate()
+        spacerLength = target
+        let leaving = target == nil
+        if shownLength == nil {
+            guard !leaving else { return }
+            show(MenuBarSpring.minimumLength)
+        }
+        let from = shownLength ?? MenuBarSpring.minimumLength
+        let to = target ?? MenuBarSpring.minimumLength
+        let began = CACurrentMediaTime()
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self, self.isSpacer else { return timer.invalidate() }
+                let progress = min(1, (CACurrentMediaTime() - began) / Self.spacerAnimation)
+                if progress >= 1 {
+                    timer.invalidate()
+                    self.show(target)
+                } else {
+                    let eased = leaving ? progress * progress : 1 - (1 - progress) * (1 - progress)
+                    self.show(from + (to - from) * eased)
+                }
+            }
+        }
+        // Common modes: it must keep running while a menu is being tracked.
+        RunLoop.main.add(timer, forMode: .common)
+        spacerTimer = timer
     }
 }

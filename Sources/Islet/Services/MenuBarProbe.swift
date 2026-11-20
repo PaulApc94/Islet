@@ -5,12 +5,27 @@ import ApplicationServices
 struct MenuBarRoom: Equatable {
     var left: CGFloat
     var right: CGFloat
+    /// Two items right of the notch share a place. macOS parks every icon it
+    /// has put behind its overflow button under that button, so this means
+    /// some are hidden there: the menu bar has no room left on that side.
+    /// (`right` cannot be trusted then: it may be measured to a hidden icon.)
+    var crowded = false
 
     /// The room around `notch`, given the frames of everything that sits in
     /// the menu bar (menu titles and status icons), all in the same space.
     static func around(notch: CGRect, screenMinX: CGFloat, screenMaxX: CGFloat, items: [CGRect]) -> MenuBarRoom {
         var leftEdge = screenMinX
         var rightEdge = screenMaxX
+        // Neighbours overlap by a point or two at most.
+        let onTheRight = items.filter {
+            $0.width > 0 && $0.midX >= notch.midX && $0.minX < screenMaxX
+                && $0.maxY > notch.minY && $0.minY < notch.maxY
+        }
+        let crowded = onTheRight.indices.contains { first in
+            onTheRight[(first + 1)...].contains { other in
+                min(onTheRight[first].maxX, other.maxX) - max(onTheRight[first].minX, other.minX) > 4
+            }
+        }
         for item in items where item.width > 0
             && item.maxY > notch.minY && item.minY < notch.maxY
             && item.maxX > screenMinX && item.minX < screenMaxX {
@@ -21,7 +36,7 @@ struct MenuBarRoom: Equatable {
                 rightEdge = min(rightEdge, max(item.minX, notch.maxX))
             }
         }
-        return MenuBarRoom(left: notch.minX - leftEdge, right: rightEdge - notch.maxX)
+        return MenuBarRoom(left: notch.minX - leftEdge, right: rightEdge - notch.maxX, crowded: crowded)
     }
 }
 
@@ -164,7 +179,8 @@ final class MenuBarProbe {
         room = newRoom
         // Readable with `defaults read io.github.paulapc94.islet lastMenuBarRoom`:
         // the quickest way to see what Islet sees when the island looks wrong.
-        let description = newRoom.map { "left=\(Int($0.left)) right=\(Int($0.right))" } ?? "unknown"
+        let description = newRoom.map { "left=\(Int($0.left)) right=\(Int($0.right))\($0.crowded ? " crowded" : "")" }
+            ?? "unknown"
         UserDefaults.standard.set(description, forKey: "lastMenuBarRoom")
         onChange?(newRoom)
     }

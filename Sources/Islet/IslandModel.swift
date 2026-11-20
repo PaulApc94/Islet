@@ -192,7 +192,10 @@ final class IslandModel: ObservableObject {
 
     init(settings: Settings = .shared) {
         self.settings = settings
-        fitObservation = settings.$fitToMenuBar
+        // Fitting the player and pushing the neighbouring icon both need to
+        // know where the menu bar's items are.
+        fitObservation = settings.$fitToMenuBar.combineLatest(settings.$pushMenuBarIcons)
+            .map { $0 || $1 }
             .dropFirst()
             .removeDuplicates()
             .sink { [weak self] enabled in
@@ -223,7 +226,7 @@ final class IslandModel: ObservableObject {
 
         menuBarProbe.onChange = { [weak self] room in self?.receive(menuBarRoom: room) }
         isStarted = true
-        if settings.fitToMenuBar {
+        if settings.fitToMenuBar || settings.pushMenuBarIcons {
             // macOS forgets the permission of a locally signed app at every
             // update: ask again then, once per build. Not at every launch: a
             // user who declined must not be nagged at each login (the menu
@@ -243,6 +246,20 @@ final class IslandModel: ObservableObject {
     /// Internal rather than private so the tests can feed measurements in.
     func receive(menuBarRoom room: MenuBarRoom?) {
         withAnimation(IslandAnimation.morph) { menuBarRoom = room }
+    }
+
+    /// Asks for a fresh measurement of the menu bar; it comes back through
+    /// `menuBarRoom`, if it differs from the last one.
+    func measureMenuBarRoom() {
+        menuBarProbe.refresh()
+    }
+
+    /// The island is out of the notch, or would be if the pointer were not
+    /// right beside it: it needs the menu bar next to the notch. (Stepping
+    /// aside does not count as resting: an icon pushed back under the pointer
+    /// that came to click it would be worse than a covered one.)
+    var wantsMenuBarRoom: Bool {
+        isExpanded || hud != nil || (showsMedia && nowPlaying != nil)
     }
 
     /// Width of the compact player's wing on each side of the notch: the

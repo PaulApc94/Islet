@@ -256,6 +256,111 @@ final class IslandModelTests {
         #expect(model.mode == .media)
     }
 
+    // MARK: Pushing the neighbouring icon
+
+    private func volumeBanner() -> IslandHUD { .volume(VolumeState(level: 0.5, isMuted: false)) }
+
+    /// A spring that reacts at once, so the tests need not wait for it.
+    private func makeSpring(_ spacer: FakeSpacer) -> MenuBarSpringController {
+        MenuBarSpringController(model: model, spacer: spacer, settleDelay: 0.02, animationTime: 0)
+    }
+
+    @Test("The island needs the menu bar beside the notch whenever it is out, stepping aside included")
+    func wantsRoomWhenOut() async {
+        #expect(!model.wantsMenuBarRoom)
+        model.present(volumeBanner(), for: 10)
+        #expect(model.wantsMenuBarRoom)
+        clearBanner()
+        #expect(!model.wantsMenuBarRoom)
+        model.setExpanded(true)
+        #expect(model.wantsMenuBarRoom)
+        model.setExpanded(false)
+
+        model.receive(nowPlaying: song("A", playing: true))
+        clearBanner()
+        model.pointerMoved(inside: false, beside: true)
+        await pause(0.4)
+        #expect(model.mode == .idle, "the player has stepped behind the notch…")
+        #expect(model.wantsMenuBarRoom, "…but the icon must not come back under the pointer")
+    }
+
+    @Test("The spring rests wide, holding the neighbour near the notch, and goes when the island comes out")
+    func springFollowsTheIsland() async {
+        settings.pushMenuBarIcons = true
+        let spacer = FakeSpacer()
+        let spring = makeSpring(spacer)
+
+        // The menu bar as measured: 58.5 points free right of the notch.
+        model.receive(menuBarRoom: MenuBarRoom(left: 193, right: 58.5))
+        #expect(spacer.spacerLength == nil, "a measurement has to hold before it counts")
+        await pause(0.1)
+        #expect(spacer.spacerLength == 10)
+
+        // What the menu bar then shows: the neighbour 33 points from the notch.
+        // Worked back from the spacer, that is the same room: nothing to change.
+        model.receive(menuBarRoom: MenuBarRoom(left: 193, right: 33))
+        await pause(0.1)
+        #expect(spacer.history == [10])
+
+        model.present(volumeBanner(), for: 10)
+        await pause(0.05)
+        #expect(spacer.spacerLength == nil, "out of the island's way")
+        clearBanner()
+        await pause(0.05)
+        #expect(spacer.spacerLength == 10, "back near the notch")
+        _ = spring
+    }
+
+    @Test("An icon hidden behind the overflow button right after widening: the spring backs off and stays under that width")
+    func springBacksOffWhenCrowded() async {
+        settings.pushMenuBarIcons = true
+        let spacer = FakeSpacer()
+        let spring = makeSpring(spacer)
+        model.receive(menuBarRoom: MenuBarRoom(left: 193, right: 58.5))
+        await pause(0.1)
+        #expect(spacer.spacerLength == 10)
+
+        model.receive(menuBarRoom: MenuBarRoom(left: 193, right: 11.5, crowded: true))
+        #expect(spacer.spacerLength == nil, "at once: the neighbour is hidden meanwhile")
+        model.receive(menuBarRoom: MenuBarRoom(left: 193, right: 58.5))
+        await pause(0.1)
+        #expect(spacer.spacerLength == 6)
+        _ = spring
+    }
+
+    @Test("No room worth a spacer, icons already hidden, no measurement, no notch or no option: the spacer stays out")
+    func springStaysOut() async {
+        let spacer = FakeSpacer()
+        let spring = makeSpring(spacer)
+        model.receive(menuBarRoom: MenuBarRoom(left: 193, right: 58.5))
+        await pause(0.1)
+        #expect(spacer.history.isEmpty, "the option is off")
+
+        settings.pushMenuBarIcons = true
+        // Another app's menus reach round the notch.
+        model.receive(menuBarRoom: MenuBarRoom(left: 10, right: 9.5))
+        await pause(0.1)
+        #expect(spacer.history.isEmpty)
+        // The menu bar is full: macOS already hides icons, with no spacer at all.
+        model.receive(menuBarRoom: MenuBarRoom(left: 193, right: 58.5, crowded: true))
+        await pause(0.1)
+        #expect(spacer.history.isEmpty)
+
+        model.receive(menuBarRoom: MenuBarRoom(left: 193, right: 58.5))
+        await pause(0.1)
+        #expect(spacer.spacerLength == 10)
+        // The permission is withdrawn: nothing is known any more.
+        model.receive(menuBarRoom: nil)
+        await pause(0.05)
+        #expect(spacer.spacerLength == nil)
+
+        model.metrics = notchless
+        model.receive(menuBarRoom: MenuBarRoom(left: 193, right: 58.5))
+        await pause(0.1)
+        #expect(spacer.spacerLength == nil)
+        _ = spring
+    }
+
     @Test("Out of the box the player has both wings, whatever the menu bar holds")
     func playerHasBothWingsByDefault() {
         #expect(!settings.fitToMenuBar, "fitting into the free room is opt-in")
@@ -439,6 +544,80 @@ struct SettingsTests {
         Islet.Settings(defaults: defaults).showMenuBarIcon = false
         #expect(!Islet.Settings(defaults: defaults).showMenuBarIcon, "read back by the next launch")
     }
+
+    @Test("Pushing the neighbouring icon takes the place of Islet's icon and of fitting the player, and back")
+    func pushingReplacesIconAndFitting() throws {
+        let domain = "islet.tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+
+        let settings = Islet.Settings(defaults: defaults)
+        #expect(!settings.pushMenuBarIcons, "opt-in")
+        settings.fitToMenuBar = true
+        settings.pushMenuBarIcons = true
+        #expect(!settings.showMenuBarIcon && !settings.fitToMenuBar)
+
+        settings.showMenuBarIcon = true
+        #expect(!settings.pushMenuBarIcons)
+        settings.pushMenuBarIcons = true
+        settings.fitToMenuBar = true
+        #expect(!settings.pushMenuBarIcons)
+
+        // Stored preferences that disagree: pushing wins.
+        defaults.set(true, forKey: "pushMenuBarIcons")
+        defaults.set(true, forKey: "showMenuBarIcon")
+        defaults.set(true, forKey: "fitToMenuBar")
+        let reloaded = Islet.Settings(defaults: defaults)
+        #expect(reloaded.pushMenuBarIcons && !reloaded.showMenuBarIcon && !reloaded.fitToMenuBar)
+    }
+}
+
+// MARK: - Menu bar spring
+
+/// Stands in for the real status item, which would show up in the menu bar.
+@MainActor
+private final class FakeSpacer: MenuBarSpacer {
+    private(set) var spacerLength: CGFloat?
+    private(set) var history: [CGFloat?] = []
+
+    func setSpacer(length: CGFloat?) {
+        spacerLength = length
+        history.append(length)
+    }
+}
+
+@Suite("Menu bar spring")
+struct MenuBarSpringTests {
+    @Test("A spacer pushes its neighbour by its length plus the gap between two items")
+    func shiftForLength() {
+        #expect(MenuBarSpring.shift(forLength: nil) == 0)
+        #expect(MenuBarSpring.shift(forLength: 2.5) == 18)
+        #expect(MenuBarSpring.shift(forLength: 10) == 25.5)
+    }
+
+    @Test("At rest the neighbour is pushed towards the notch, never closer than the margin")
+    func restLength() {
+        // The menu bar as measured: 58.5 points free. The icon ends 33 points
+        // from the notch: closer than 27, macOS hides it behind its overflow button.
+        let measured = MenuBarSpring.restLength(room: 58.5)
+        #expect(measured == 10)
+        #expect(58.5 - MenuBarSpring.shift(forLength: measured) == MenuBarSpring.margin)
+        #expect(MenuBarSpring.margin > 27)
+        #expect(MenuBarSpring.restLength(room: 52.5) == 4)
+
+        // Not worth a spacer: it could not even pay for its own gap.
+        #expect(MenuBarSpring.restLength(room: 48) == nil)
+        #expect(MenuBarSpring.restLength(room: 9.5) == nil)
+        #expect(MenuBarSpring.restLength(room: 0) == nil)
+    }
+
+    @Test("A length that proved too wide is not tried again while the room is the same")
+    func failureIsRemembered() {
+        #expect(MenuBarSpring.restLength(room: 58.5, failure: (58.5, 10)) == 6)
+        #expect(MenuBarSpring.restLength(room: 57, failure: (58.5, 10)) == 6)
+        #expect(MenuBarSpring.restLength(room: 80, failure: (58.5, 10)) == 31.5, "another menu bar altogether")
+        #expect(MenuBarSpring.restLength(room: 52.5, failure: (52.5, 3)) == nil)
+    }
 }
 
 // MARK: - Pointer geometry
@@ -535,6 +714,25 @@ struct MenuBarRoomTests {
         #expect(room([item(from: 800, to: 870)]).right == 0)
         // On another display (far right), or in a window below the menu bar.
         #expect(room([item(from: 1600, to: 1700), item(from: 700, to: 900, y: 200)]) == room([]))
+    }
+
+    @Test("Two items sharing a place right of the notch: an icon has been put behind the overflow button")
+    func crowdedRightSide() {
+        // As measured with the spacer in: the neighbour, the spacer, the next icons.
+        let resting = room([item(from: 881.5, to: 905.5), item(from: 920, to: 933),
+                            item(from: 946, to: 963), item(from: 969, to: 1005), item(from: 1003, to: 1070)])
+        #expect(!resting.crowded, "neighbours may overlap by a point or two")
+        #expect(resting.right == 33)
+
+        // As measured with the spacer too wide: the neighbour is parked under
+        // the overflow button that took its place.
+        let hidden = room([item(from: 860, to: 884), item(from: 874, to: 891.5),
+                           item(from: 906, to: 924.5), item(from: 940, to: 957)])
+        #expect(hidden.crowded)
+
+        // Icons parked at the far left of the screen, or another display's, do not count.
+        #expect(!room([item(from: -1, to: 33), item(from: 7, to: 33), item(from: 907, to: 931)]).crowded)
+        #expect(!room([item(from: 1600, to: 1700), item(from: 1650, to: 1700)]).crowded)
     }
 }
 

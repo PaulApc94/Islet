@@ -14,7 +14,25 @@ final class Settings: ObservableObject {
     /// Fit the compact player into the free room beside the notch instead of
     /// drawing it over the menu bar's items. Off by default: measuring that
     /// room needs the Accessibility permission.
-    @Published var fitToMenuBar: Bool { didSet { defaults.set(fitToMenuBar, forKey: Key.fitToMenuBar) } }
+    @Published var fitToMenuBar: Bool {
+        didSet {
+            defaults.set(fitToMenuBar, forKey: Key.fitToMenuBar)
+            if fitToMenuBar, pushMenuBarIcons { pushMenuBarIcons = false }
+        }
+    }
+    /// Islet's menu bar item, left blank, holds the icon on its left against
+    /// the notch while the island rests, and lets it slide away when the island
+    /// comes out (see `MenuBarSpring`). The blank item takes the place of the
+    /// icon, and moving the neighbour away is the opposite of fitting the
+    /// player around it: turning this on turns those two off, and back.
+    @Published var pushMenuBarIcons: Bool {
+        didSet {
+            defaults.set(pushMenuBarIcons, forKey: Key.pushMenuBarIcons)
+            guard pushMenuBarIcons else { return }
+            if showMenuBarIcon { showMenuBarIcon = false }
+            if fitToMenuBar { fitToMenuBar = false }
+        }
+    }
     @Published var showVolume: Bool { didSet { defaults.set(showVolume, forKey: Key.showVolume) } }
     @Published var showPower: Bool { didSet { defaults.set(showPower, forKey: Key.showPower) } }
     @Published var showAudioOutput: Bool { didSet { defaults.set(showAudioOutput, forKey: Key.showAudioOutput) } }
@@ -23,7 +41,12 @@ final class Settings: ObservableObject {
     /// Islet's own icon in the menu bar. Hidden, it leaves its place beside the
     /// notch free; the settings then open from the island (right-click) or by
     /// launching Islet again.
-    @Published var showMenuBarIcon: Bool { didSet { defaults.set(showMenuBarIcon, forKey: Key.showMenuBarIcon) } }
+    @Published var showMenuBarIcon: Bool {
+        didSet {
+            defaults.set(showMenuBarIcon, forKey: Key.showMenuBarIcon)
+            if showMenuBarIcon, pushMenuBarIcons { pushMenuBarIcons = false }
+        }
+    }
 
     private let defaults: UserDefaults
 
@@ -31,6 +54,7 @@ final class Settings: ObservableObject {
         static let expandOnHover = "expandOnHover"
         static let showNowPlaying = "showNowPlaying"
         static let fitToMenuBar = "fitToMenuBar"
+        static let pushMenuBarIcons = "pushMenuBarIcons"
         static let showVolume = "showVolume"
         static let showPower = "showPower"
         static let showAudioOutput = "showAudioOutput"
@@ -45,6 +69,7 @@ final class Settings: ObservableObject {
             Key.expandOnHover: true,
             Key.showNowPlaying: true,
             Key.fitToMenuBar: false,
+            Key.pushMenuBarIcons: false,
             Key.showVolume: true,
             Key.showPower: true,
             Key.showAudioOutput: true,
@@ -60,6 +85,11 @@ final class Settings: ObservableObject {
         showAudioOutput = defaults.bool(forKey: Key.showAudioOutput)
         showTrackChanges = defaults.bool(forKey: Key.showTrackChanges)
         haptics = defaults.bool(forKey: Key.haptics)
-        showMenuBarIcon = defaults.bool(forKey: Key.showMenuBarIcon)
+        // Pushing the neighbour wins over the two it replaces, should the
+        // stored preferences ever disagree.
+        let push = defaults.bool(forKey: Key.pushMenuBarIcons)
+        pushMenuBarIcons = push
+        showMenuBarIcon = !push && defaults.bool(forKey: Key.showMenuBarIcon)
+        if push { fitToMenuBar = false }
     }
 }

@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var model: IslandModel?
     private var windowController: IslandWindowController?
     private var statusItem: StatusItemController?
+    private var spring: MenuBarSpringController?
     private var debugObserver: NSObjectProtocol?
     private var menuRequestObserver: NSObjectProtocol?
 
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.model = model
         self.windowController = windowController
         self.statusItem = statusItem
+        spring = MenuBarSpringController(model: model, spacer: statusItem)
 
         windowController.onSecondaryClick = { [weak statusItem] in
             statusItem?.showMenu(at: NSEvent.mouseLocation)
