@@ -1,6 +1,33 @@
 import AppKit
 import SwiftUI
 
+/// Where the pointer is relative to the island. Pure geometry, in AppKit's
+/// global coordinates (y grows upwards), so it can be tested without a screen.
+struct PointerZone: Equatable {
+    /// On the island: the notch when it is closed, the whole island when open.
+    var inside: Bool
+    /// In the menu bar strip the compact player's wings cover, beside the notch.
+    var beside: Bool
+
+    static func classify(location: CGPoint,
+                         screenFrame: CGRect,
+                         hitSize: CGSize,
+                         yieldZoneWidth: CGFloat,
+                         stripHeight: CGFloat) -> PointerZone {
+        // Both areas hang from the top centre of the screen. AppKit's mouse
+        // test includes the top edge, where a pointer pushed against the top
+        // of the screen rests, and nothing above it: a display arranged above
+        // this one never counts as the island.
+        func area(width: CGFloat, height: CGFloat) -> CGRect {
+            CGRect(x: screenFrame.midX - width / 2, y: screenFrame.maxY - height, width: width, height: height)
+        }
+        let inside = NSMouseInRect(location, area(width: hitSize.width, height: hitSize.height), false)
+        let beside = !inside && yieldZoneWidth > 0
+            && NSMouseInRect(location, area(width: yieldZoneWidth, height: stripHeight), false)
+        return PointerZone(inside: inside, beside: beside)
+    }
+}
+
 /// A panel that can sit in the menu bar area and never takes focus.
 final class IslandPanel: NSPanel {
     override var canBecomeKey: Bool { false }
@@ -213,39 +240,29 @@ final class IslandWindowController {
     }
 
     private func pointerDidMove() {
-        let location = NSEvent.mouseLocation
-        let size = model.hitSize
-        let hitArea = CGRect(x: screenFrame.midX - size.width / 2,
-                             y: screenFrame.maxY - size.height,
-                             width: size.width,
-                             height: size.height)
-
         // A press that started on the island (scrubbing the progress bar) keeps
         // it open even when the pointer strays outside before the button is released.
         if isPressingIsland, NSEvent.pressedMouseButtons & 1 == 0 {
             isPressingIsland = false
         }
-        // AppKit's mouse test includes the top edge, where a pointer pushed
-        // against the top of the screen rests, and nothing above it: a display
-        // arranged above this one never counts as the island.
-        let inside = isPressingIsland || NSMouseInRect(location, hitArea, false)
-
-        // The menu bar strip the closed island's wings cover, beside the notch.
-        // The panel keeps ignoring the mouse there (clicks reach the menu bar);
-        // the model makes the island step aside so what it covers can be seen.
-        let zoneWidth = model.yieldZoneWidth
-        let stripHeight = model.metrics.notchHeight
-        let strip = CGRect(x: screenFrame.midX - zoneWidth / 2,
-                           y: screenFrame.maxY - stripHeight,
-                           width: zoneWidth,
-                           height: stripHeight)
-        let beside = !inside && zoneWidth > 0 && NSMouseInRect(location, strip, false)
+        let zone = PointerZone.classify(location: NSEvent.mouseLocation,
+                                        screenFrame: screenFrame,
+                                        hitSize: model.hitSize,
+                                        yieldZoneWidth: model.yieldZoneWidth,
+                                        stripHeight: model.metrics.notchHeight)
+        let inside = isPressingIsland || zone.inside
+        // Beside the notch the panel keeps ignoring the mouse (clicks reach the
+        // menu bar); the model makes the island step aside so that what it
+        // covers can be seen.
+        let beside = !inside && zone.beside
 
         if panel.ignoresMouseEvents == inside {
             panel.ignoresMouseEvents = !inside
         }
         model.pointerMoved(inside: inside, beside: beside)
-        setHoverPoll(active: inside)
+        // Keep re-checking while the island is stepping aside too: the zone
+        // can change under a pointer that does not move (music stops).
+        setHoverPoll(active: inside || beside || model.isYielding)
     }
 
     /// While the pointer is on the island, re-check a few times per second: a

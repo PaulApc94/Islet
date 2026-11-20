@@ -1,5 +1,4 @@
 import AppKit
-import ServiceManagement
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -44,29 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowController.show()
         model.start()
         installDebugCommands(for: model)
-        enableLaunchAtLoginOnce()
-    }
-
-    /// An island is meant to be there all the time, like the notch it lives in:
-    /// the first launch of an installed copy turns "launch at login" on. Once
-    /// only: after that, the switch in the menu (and System Settings) is the
-    /// user's, and Islet never turns it back on behind their back.
-    private func enableLaunchAtLoginOnce() {
-        let key = "didSetUpLoginItem"
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: key) else { return }
-        // A development build would register its build folder instead of the app.
-        let path = Bundle.main.bundlePath
-        guard path.hasPrefix("/Applications/") || path.hasPrefix(NSHomeDirectory() + "/Applications/") else { return }
-
-        defaults.set(true, forKey: key)
-        let service = SMAppService.mainApp
-        guard service.status == .notRegistered || service.status == .notFound else { return }
-        do {
-            try service.register()
-        } catch {
-            NSLog("Islet: could not turn launch at login on: %@", error.localizedDescription)
-        }
+        LoginItem.setUpIfNeeded()
     }
 
     /// Launching Islet again (Finder, Spotlight, Launchpad) opens the settings:

@@ -143,7 +143,9 @@ final class IslandModelTests {
         #expect(model.yieldZoneWidth == zone, "the zone must not vanish under the pointer")
 
         model.pointerMoved(inside: false, beside: false)
-        #expect(model.mode == .idle, "it waits for the pointer to be gone")
+        await pause(0.15)
+        #expect(model.isYielding, "it waits a moment in case the pointer comes back")
+        #expect(model.mode == .idle)
         await pause(0.9)
         #expect(!model.isYielding)
         #expect(model.mode == .media)
@@ -154,7 +156,40 @@ final class IslandModelTests {
         model.receive(nowPlaying: song("A", playing: true))
         clearBanner()
         model.pointerMoved(inside: false, beside: true)
+        // A real pointer takes a few milliseconds to cross: less than the dwell.
+        await pause(0.03)
+        #expect(!model.isYielding)
         model.pointerMoved(inside: false, beside: false)
+        #expect(!model.isYielding)
+        await pause(0.4)
+        #expect(!model.isYielding)
+        #expect(model.mode == .media)
+    }
+
+    @Test("Banners still show while the player has stepped aside: a low-battery warning comes only once")
+    func bannersShowWhileSteppingAside() async {
+        model.receive(nowPlaying: song("A", playing: true))
+        clearBanner()
+        model.pointerMoved(inside: false, beside: true)
+        await pause(0.4)
+        #expect(model.mode == .idle)
+
+        let warning = IslandHUD.lowBattery(percent: 5)
+        model.present(warning, for: 10)
+        #expect(model.mode == .hud(warning))
+    }
+
+    @Test("Without a notch the pill is the island: it is all clickable and never hides from the pointer")
+    func notchlessPillStaysPut() async {
+        model.metrics = notchless
+        model.receive(nowPlaying: song("A", playing: true))
+        clearBanner()
+        #expect(model.mode == .media)
+        #expect(model.hitSize.width == model.layout.width)
+        #expect(model.hitSize.height == notchless.notchHeight)
+        #expect(model.yieldZoneWidth == 0)
+
+        model.pointerMoved(inside: false, beside: true)
         await pause(0.4)
         #expect(!model.isYielding)
         #expect(model.mode == .media)
@@ -299,6 +334,52 @@ final class IslandModelTests {
                 #expect(layout.height <= IslandDesign.canvasSize.height - 40, "\(mode)")
             }
         }
+    }
+}
+
+// MARK: - Pointer geometry
+
+@Suite("Pointer zones")
+struct PointerZoneTests {
+    // A 1512 x 982 screen with a 185 x 32 notch, and the compact player out:
+    // 273 pt of island, hence a 301 pt strip in which it steps aside.
+    private let screen = CGRect(x: 0, y: 0, width: 1512, height: 982)
+    private let notch = CGSize(width: 185, height: 32)
+
+    private func zone(x: CGFloat, fromTop: CGFloat, strip: CGFloat = 301) -> PointerZone {
+        PointerZone.classify(location: CGPoint(x: screen.midX + x, y: screen.maxY - fromTop),
+                             screenFrame: screen,
+                             hitSize: notch,
+                             yieldZoneWidth: strip,
+                             stripHeight: notch.height)
+    }
+
+    @Test("The notch is the island, up to the very top edge where a pushed pointer rests")
+    func notchIsInside() {
+        #expect(zone(x: 0, fromTop: 16) == PointerZone(inside: true, beside: false))
+        #expect(zone(x: 0, fromTop: 0).inside)
+        #expect(zone(x: -92, fromTop: 16).inside)
+    }
+
+    @Test("The menu bar next to the notch is beside the island, not on it")
+    func wingsAreBeside() {
+        #expect(zone(x: 120, fromTop: 16) == PointerZone(inside: false, beside: true))
+        #expect(zone(x: -120, fromTop: 16) == PointerZone(inside: false, beside: true))
+        #expect(zone(x: 149, fromTop: 16).beside, "the margin around the wings counts")
+    }
+
+    @Test("Further along the menu bar, below it, or on a display above: neither")
+    func elsewhereIsNeither() {
+        let nowhere = PointerZone(inside: false, beside: false)
+        #expect(zone(x: 160, fromTop: 16) == nowhere)
+        #expect(zone(x: 120, fromTop: 40) == nowhere)
+        #expect(zone(x: 0, fromTop: 40) == nowhere)
+        #expect(zone(x: 0, fromTop: -1) == nowhere)
+    }
+
+    @Test("With no player beside the notch there is nothing to step aside from")
+    func noStripWithoutWings() {
+        #expect(zone(x: 120, fromTop: 16, strip: 0) == PointerZone(inside: false, beside: false))
     }
 }
 

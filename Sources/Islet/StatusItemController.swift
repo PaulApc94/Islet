@@ -113,7 +113,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     // MARK: Launch at login
 
     private func loginItem() -> NSMenuItem {
-        let status = SMAppService.mainApp.status
+        let status = LoginItem.status
         // Turned off in System Settings: registering again would not turn it
         // back on, only the user can, so the item leads there instead.
         let needsApproval = status == .requiresApproval
@@ -128,22 +128,21 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc private func toggleLaunchAtLogin() {
-        let service = SMAppService.mainApp
         do {
-            switch service.status {
+            switch LoginItem.status {
             case .enabled:
-                try service.unregister()
+                try LoginItem.setEnabled(false)
             case .requiresApproval:
                 SMAppService.openSystemSettingsLoginItems()
             default:
-                try service.register()
-                if service.status == .requiresApproval {
+                try LoginItem.setEnabled(true)
+                if LoginItem.status == .requiresApproval {
                     SMAppService.openSystemSettingsLoginItems()
                 }
             }
         } catch {
             NSLog("Islet: could not change the login item: %@", error.localizedDescription)
-            if service.status == .requiresApproval {
+            if LoginItem.status == .requiresApproval {
                 SMAppService.openSystemSettingsLoginItems()
             } else {
                 NSSound.beep()

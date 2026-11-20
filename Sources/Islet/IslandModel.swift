@@ -197,9 +197,12 @@ final class IslandModel: ObservableObject {
 
     var mode: IslandMode {
         if isExpanded { return .expanded }
-        // Stepping aside: back behind the notch, whatever there is to show.
-        if isYielding { return .idle }
-        return restingMode
+        let resting = restingMode
+        // Stepping aside for the pointer. Only the compact player does: it
+        // stays for hours. Banners last a few seconds and have to be seen (a
+        // low-battery warning is issued once), so they show regardless.
+        if isYielding, resting == .media || resting == .hud(.track) { return .idle }
+        return resting
     }
 
     /// What the closed island shows when the pointer is not beside it.
@@ -257,26 +260,36 @@ final class IslandModel: ObservableObject {
             let layout = self.layout
             return CGSize(width: layout.width + 20, height: layout.height + 14)
         }
-        // Closed, the island is only the notch as far as the pointer goes. Its
-        // wings lie over the menu bar's own menus and icons, and a banner's
-        // caption over the apps' windows: a pointer there is aiming at those,
-        // so it must neither open the island nor lose its click to it.
-        return CGSize(width: metrics.notchWidth,
-                      height: metrics.hasNotch ? metrics.notchHeight : 5)
+        if metrics.hasNotch {
+            // Closed, the island is only the notch as far as the pointer goes.
+            // Its wings lie over the menu bar's own menus and icons, and a
+            // banner's caption over the apps' windows: a pointer there is
+            // aiming at those, so it must neither open the island nor lose
+            // its click to it.
+            return CGSize(width: metrics.notchWidth, height: metrics.notchHeight)
+        }
+        // Without a notch there is nothing to aim at but the pill the island
+        // draws: all of it counts (a caption below the menu bar excepted),
+        // and at rest a thin strip along the top edge.
+        let layout = self.layout
+        var height = layout.height
+        if case .hud(let hud) = mode, hud.hasCaption {
+            height = metrics.notchHeight
+        }
+        return CGSize(width: max(layout.width, metrics.notchWidth), height: max(height, 5))
     }
 
-    /// Width of the menu bar strip, centred on the notch, in which the closed
-    /// island steps aside for the pointer: what its wings cover, plus a margin
-    /// so that it moves just before the pointer arrives. Zero when nothing
-    /// sticks out of the notch.
+    /// Width of the menu bar strip, centred on the notch, in which the compact
+    /// player steps aside for the pointer: what its wings cover, plus a margin
+    /// so that it moves just before the pointer arrives. Zero when there is no
+    /// player beside the notch, and on screens without a notch, where the pill
+    /// is the island itself and hiding it would leave nothing to click.
     var yieldZoneWidth: CGFloat {
-        guard !isExpanded else { return 0 }
-        // Measured on what the island would show, not on what it shows while
-        // stepping aside: otherwise the zone would vanish under the pointer
-        // and the wings would come straight back.
-        let covered = layout(for: restingMode).width
-        guard covered > metrics.notchWidth else { return 0 }
-        return covered + 2 * 14
+        guard metrics.hasNotch, !isExpanded, showsMedia, nowPlaying != nil else { return 0 }
+        // Measured on the player's own layout, not on what the island shows
+        // right now: otherwise the zone would vanish under the pointer as soon
+        // as the island stepped aside, and the wings would come straight back.
+        return layout(for: .media).width + 2 * 14
     }
 
     // MARK: Pointer
@@ -286,7 +299,7 @@ final class IslandModel: ObservableObject {
     ///   - beside: the pointer is in the menu bar right next to the notch, in
     ///     the strip the closed island's wings cover.
     func pointerMoved(inside: Bool, beside: Bool = false) {
-        updateYielding(beside: beside)
+        updateYielding(beside: beside && yieldZoneWidth > 0)
         guard inside != isHovering else { return }
         withAnimation(IslandAnimation.hover) { isHovering = inside }
 

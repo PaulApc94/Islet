@@ -85,10 +85,11 @@ Pour mettre à jour, relance la même commande après un `git pull`.
   réglages (Islet ne le réactivera pas dans ton dos).
 - **Passe le pointeur sur l'encoche** : l'île gonfle légèrement, puis s'ouvre.
   Éloigne-le et elle se referme.
-- **Approche le pointeur d'un menu ou d'une icône que l'île recouvre** : elle se
-  replie derrière l'encoche pour te laisser voir et cliquer, puis revient quand
-  le pointeur s'éloigne. Fermée, l'île ne prend jamais un clic destiné à la
-  barre des menus.
+- **Approche le pointeur d'un menu ou d'une icône que le lecteur recouvre** : il
+  se replie derrière l'encoche pour te laisser voir et cliquer, puis revient
+  quand le pointeur s'éloigne. Sur un Mac à encoche, l'île fermée ne prend
+  jamais un clic destiné à la barre des menus. Les bannières (volume, charge,
+  batterie), qui ne durent que quelques secondes, restent affichées.
 - **Les réglages** sont dans l'icône en forme de capsule de la barre des menus :
   activer ou non chaque activité (dont la musique), ouvrir au survol ou
   seulement au clic, retour haptique, lancement au démarrage du Mac, quitter.
@@ -96,7 +97,9 @@ Pour mettre à jour, relance la même commande après un `git pull`.
   tiennent pas dans la barre des menus) : fais un clic droit sur l'île, ou
   relance Islet depuis Spotlight. Le même menu s'ouvre.
 - **Sur un Mac sans encoche** (ou un écran externe seul), l'île se dessine en
-  haut de l'écran, au centre : vise le bord supérieur pour l'ouvrir.
+  haut de l'écran, au centre : vise le bord supérieur pour l'ouvrir. Là, la
+  pastille est l'île elle-même : elle ne se replie pas, et un clic dessus
+  l'ouvre.
 - L'île s'efface pendant Mission Control et reste visible au-dessus des apps en
   plein écran.
 

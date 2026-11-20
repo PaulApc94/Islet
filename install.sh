@@ -189,6 +189,12 @@ for other in "/Applications/$APP_NAME.app" "$HOME/Applications/$APP_NAME.app"; d
     if [ "$other" = "$INSTALLED_APP" ] || [ ! -e "$other" ] || is_foreign_app "$other"; then
         continue
     fi
+    # macOS records "launch at login" by app path. Only the app itself can
+    # withdraw its record, so ask this copy to before it goes: otherwise a dead
+    # entry stays behind. The new copy registers its own on its first launch.
+    if [ -x "$other/Contents/MacOS/$APP_NAME" ]; then
+        "$other/Contents/MacOS/$APP_NAME" --unregister-login-item >/dev/null 2>&1 || true
+    fi
     remove_app "$other" \
         || warn "une autre copie d'$APP_NAME subsiste (droits insuffisants pour la supprimer) : $other. Pour éviter les doublons, mettez-la à la Corbeille depuis le Finder."
 done
@@ -207,15 +213,35 @@ fi
 /usr/bin/xattr -dr com.apple.quarantine "$INSTALLED_APP" 2>/dev/null || true
 
 step "Lancement…"
-open "$INSTALLED_APP" \
-    || warn "le lancement automatique a échoué : ouvrez $INSTALLED_APP depuis le Finder."
+launched=1
+if ! open "$INSTALLED_APP"; then
+    launched=0
+    warn "le lancement automatique a échoué : ouvrez $INSTALLED_APP depuis le Finder."
+fi
+
+# Islet turns "launch at login" on by itself the first time it runs from a
+# given folder, unless the user switched it off. Rather than promise, ask the
+# app what macOS has on record, giving its first launch a moment to register.
+login_item=""
+if [ "$launched" -eq 1 ]; then
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        login_item="$("$INSTALLED_APP/Contents/MacOS/$APP_NAME" --login-item-status 2>/dev/null || true)"
+        [ "$login_item" = "enabled" ] && break
+        sleep 0.3
+    done
+fi
+if [ "$login_item" = "enabled" ]; then
+    LOGIN_LINE="Il se lancera tout seul à chaque ouverture de session (réglable dans son menu)."
+else
+    LOGIN_LINE="Le lancement à l'ouverture de session est désactivé : cochez « Lancer au démarrage » dans son menu pour l'activer."
+fi
 
 cat <<EOF
 
 ${BOLD}$APP_NAME est installée :${RESET} $INSTALLED_APP
 
   • L'îlot vit dans l'encoche, tout en haut de l'écran.
-  • Il se lancera tout seul à chaque ouverture de session (réglable dans son menu).
+  • $LOGIN_LINE
   • Les réglages : l'icône $APP_NAME de la barre des menus, ou un clic droit sur l'îlot.
   • Pour mettre à jour : relancez ./install.sh    Pour désinstaller : ./uninstall.sh
 EOF
