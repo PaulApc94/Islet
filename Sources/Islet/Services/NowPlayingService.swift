@@ -129,13 +129,19 @@ final class NowPlayingService {
     /// `ISLET_BRIDGE_PATH` wins (development builds), otherwise the copy shipped in the bundle.
     private static func locateBridge() -> String? {
         let override = ProcessInfo.processInfo.environment["ISLET_BRIDGE_PATH"] ?? ""
-        let path = override.isEmpty
-            ? Bundle.main.url(forResource: "IsletBridge", withExtension: "dylib")?.path
+        let bundled = Bundle.main.url(forResource: "IsletBridge", withExtension: "dylib")?.path
+        if !override.isEmpty {
             // perl is a hardened binary: it refuses to load a relative path,
             // which would make the bridge die and restart forever.
-            : URL(fileURLWithPath: override).standardizedFileURL.path
-        guard let path, FileManager.default.isReadableFile(atPath: path) else { return nil }
-        return path
+            let resolved = URL(fileURLWithPath: override).standardizedFileURL.path
+            if FileManager.default.isReadableFile(atPath: resolved) { return resolved }
+            // A relative path is resolved against the working directory, which
+            // is "/" when the app is started through `open`: say so, and fall
+            // back rather than leaving Now Playing dead for the session.
+            NSLog("Islet: ISLET_BRIDGE_PATH is not readable (%@), using the bundled bridge", resolved)
+        }
+        guard let bundled, FileManager.default.isReadableFile(atPath: bundled) else { return nil }
+        return bundled
     }
 
     private func launchBridge() {

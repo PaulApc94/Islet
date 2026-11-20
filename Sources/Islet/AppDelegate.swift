@@ -6,11 +6,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: IslandWindowController?
     private var statusItem: StatusItemController?
     private var debugObserver: NSObjectProtocol?
+    private var menuRequestObserver: NSObjectProtocol?
+
+    /// Posted by a second Islet before it quits: "show your settings menu".
+    private static let showMenuRequest = Notification.Name("io.github.paulapc94.islet.showMenu")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Two islands in the same notch would fight each other: the first one wins.
         if let other = Self.otherRunningIslet() {
             NSLog("Islet: another Islet is already running (pid %d), quitting", other.processIdentifier)
+            // Launching Islet again is how the settings are reached when the
+            // menu-bar icon is hidden. macOS only tells the running instance
+            // about it when the very same copy is launched; for any other copy
+            // (another folder, a development build) this one passes the word on.
+            DistributedNotificationCenter.default().postNotificationName(
+                Self.showMenuRequest, object: nil, userInfo: nil, deliverImmediately: true)
             NSApp.terminate(nil)
             return
         }
@@ -24,6 +34,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         windowController.onSecondaryClick = { [weak statusItem] in
             statusItem?.showMenu(at: NSEvent.mouseLocation)
+        }
+        menuRequestObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Self.showMenuRequest, object: nil, queue: .main
+        ) { [weak statusItem] _ in
+            MainActor.assumeIsolated { statusItem?.showMenuBelowNotch() }
         }
         windowController.show()
         model.start()

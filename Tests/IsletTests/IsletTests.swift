@@ -95,9 +95,24 @@ final class IslandModelTests {
         settings.showNowPlaying = true
         #expect(model.mode == .media)
         #expect(model.hud == nil, "the track was already playing: it is not new")
+        // The player's next update of the same track (a position refresh, the
+        // cover arriving) must not announce it either.
+        model.receive(nowPlaying: song("A", playing: true))
+        #expect(model.hud == nil)
 
         settings.showNowPlaying = false
         #expect(model.mode == .idle)
+    }
+
+    @Test("Turning the music activity off withdraws a track announcement that is on screen")
+    func turningMusicOffWithdrawsTheAnnouncement() {
+        model.receive(nowPlaying: song("A", playing: true))
+        #expect(model.hud == .track)
+
+        settings.showNowPlaying = false
+        #expect(model.hud == nil)
+        #expect(model.mode == .idle)
+        #expect(model.layout.width == notched.notchWidth)
     }
 
     @Test("A banner's caption, below the menu bar, never counts as the island")

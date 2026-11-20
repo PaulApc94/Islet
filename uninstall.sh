@@ -100,6 +100,12 @@ failed=0
 # The copy in build/ counts too: Spotlight indexes it and would relaunch the island.
 for app in "/Applications/$APP_NAME.app" "$HOME/Applications/$APP_NAME.app" "$ROOT/build/$APP_NAME.app"; do
     [ -e "$app" ] || [ -L "$app" ] || continue
+    # The build/ copy is only ours when this script really sits in a clone
+    # (run through a symlink, ROOT is some other folder) and the bundle says
+    # it is Islet: anything else found there is left alone, silently.
+    if [ "$app" = "$ROOT/build/$APP_NAME.app" ]; then
+        [ -f "$ROOT/scripts/build-app.sh" ] && [ "$(bundle_id_of "$app")" = "$BUNDLE_ID" ] || continue
+    fi
     if is_foreign_app "$app"; then
         warn "$app est une autre application portant le même nom : elle est laissée intacte."
         continue

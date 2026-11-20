@@ -41,7 +41,7 @@ run: build
 	@pkill -x Islet 2>/dev/null || true
 	@n=0; while pgrep -x Islet >/dev/null 2>&1 && [ $$n -lt 50 ]; do sleep 0.1; n=$$((n + 1)); done
 	@open $(RUN_ENV) $(APP)
-	@echo "Islet lancée depuis $(APP). Pour revenir à la version installée : open /Applications/Islet.app"
+	@echo "Islet lancée depuis $(APP). Pour revenir à la version installée : ./install.sh (ou quitte cette copie, puis rouvre Islet depuis Applications)."
 
 # Regenerate the committed icon from its drawing code.
 icon:

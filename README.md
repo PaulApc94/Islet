@@ -174,9 +174,11 @@ compile et assemble `build/Islet.app` ; `make run` la lance directement,
 `make test` exécute les tests de la logique (états de l'île, géométrie,
 position de lecture) et `make clean` efface les produits de compilation.
 
-Une seule Islet tourne à la fois : une deuxième se ferme aussitôt (le journal
-système dit pourquoi). `make run` arrête donc la version installée ; pour la
-retrouver ensuite, lance `open /Applications/Islet.app`.
+Une seule Islet tourne à la fois : une deuxième se ferme aussitôt, après avoir
+demandé à la première d'ouvrir son menu. `make run` arrête donc la version
+installée. Pour la retrouver ensuite, relance `./install.sh`, ou quitte la
+copie de développement (clic droit sur l'île, « Quitter Islet ») puis rouvre
+Islet depuis le dossier Applications.
 
 Deux outils évitent d'avoir à toucher au matériel pour tester :
 

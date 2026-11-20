@@ -9,10 +9,28 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let settings: Settings
     private let menu = NSMenu()
+    /// The app the user was working in before Islet's menu took the keyboard.
+    private var lastOtherApp: NSRunningApplication?
+    private var activationObserver: NSObjectProtocol?
 
     init(settings: Settings) {
         self.settings = settings
         super.init()
+
+        let current = NSRunningApplication.current
+        if let front = NSWorkspace.shared.frontmostApplication, front != current {
+            lastOtherApp = front
+        }
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated {
+                if let app, app != current { self?.lastOtherApp = app }
+            }
+        }
 
         if let button = statusItem.button {
             let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
@@ -28,10 +46,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     /// Opens the settings menu at a point on screen (global coordinates).
     func showMenu(at location: NSPoint) {
-        // Without this the menu would not take the keyboard, and would not
-        // close when the user clicks elsewhere.
+        // Without this the menu would not take the keyboard (arrows, Escape).
         NSApp.activate()
+        // Returns once the menu is closed.
         menu.popUp(positioning: nil, at: location, in: nil)
+        // Islet has no window to type in: hand the keyboard back to the app
+        // the user was in, or their next keystrokes would go nowhere.
+        if NSApp.isActive {
+            lastOtherApp?.activate()
+        }
     }
 
     /// Opens the settings menu just below the notch: a place that is always on screen.

@@ -195,7 +195,10 @@ done
 
 # The intermediate bundle in build/ is a third copy that Spotlight indexes and
 # can launch. It has served its purpose: `make build` recreates it on demand.
-rm -rf "$BUILT_APP" 2>/dev/null || true
+# (Unless build/ is a link to the install folder: then it *is* the installed app.)
+if ! [ "$BUILT_APP" -ef "$INSTALLED_APP" ]; then
+    rm -rf "$BUILT_APP" 2>/dev/null || true
+fi
 
 # Belt and braces: the build already strips extended attributes, but a
 # quarantine flag on the installed copy (it follows files out of a downloaded
