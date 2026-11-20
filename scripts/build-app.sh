@@ -1,7 +1,10 @@
 #!/bin/bash
 #
-# Builds Islet in release mode and assembles build/Islet.app, an ad-hoc signed
-# app bundle, with nothing but the Command Line Tools (no Xcode needed).
+# Builds Islet in release mode and assembles build/Islet.app, a signed app
+# bundle, with nothing but the Command Line Tools (no Xcode needed).
+#
+# The bundle is signed with the local identity "Islet Local Signing" when
+# scripts/make-signing-identity.sh has created it, ad hoc otherwise.
 #
 # Usage: scripts/build-app.sh        (from any directory)
 #
@@ -11,6 +14,7 @@ set -euo pipefail
 
 readonly APP_NAME="Islet"
 readonly MIN_MACOS="14.0"
+readonly SIGNING_IDENTITY="Islet Local Signing"
 
 # Resolve everything from the script's own location so the cwd never matters.
 # (cd is silenced because it echoes the directory when CDPATH is set.)
@@ -129,7 +133,30 @@ quiet_codesign() {
     fi
 }
 
-step "Signature ad hoc…"
+# True when scripts/make-signing-identity.sh has put its identity (certificate
+# and private key) in the user's keychains. No -v: a self-signed certificate is
+# listed as untrusted, never as "valid", and codesign signs with it all the same.
+# An expired certificate is listed too, yet codesign refuses it ("no identity
+# found"): it does not count.
+# Tests only: ISLET_SIGNING_KEYCHAIN names the one keychain file to look in.
+has_signing_identity() {
+    local identities
+    if [ -n "${ISLET_SIGNING_KEYCHAIN:-}" ]; then
+        identities="$(/usr/bin/security find-identity -p codesigning "$ISLET_SIGNING_KEYCHAIN" 2>/dev/null || true)"
+    else
+        identities="$(/usr/bin/security find-identity -p codesigning 2>/dev/null || true)"
+    fi
+    printf '%s\n' "$identities" \
+        | grep -F "\"$SIGNING_IDENTITY\"" \
+        | grep -v -e CSSMERR_TP_CERT_EXPIRED -e CSSMERR_TP_CERT_NOT_VALID_YET >/dev/null
+}
+
+# Signs the library, then the bundle (inside out: the bundle's seal covers the
+# signed library). "$@" holds the codesign options that choose the signature.
+sign_bundle() {
+    quiet_codesign --force "$@" "$DYLIB" && quiet_codesign --force "$@" "$APP"
+}
+
 # Extended attributes copied along with the sources (Finder info, quarantine,
 # file-provider tags when the repo lives in a synced folder) make codesign
 # reject the bundle, so start from bare files.
@@ -137,11 +164,37 @@ step "Signature ad hoc…"
 # and has no -r option. Best effort: a few attributes are system-protected and
 # cannot be removed; codesign right below is the judge of what still matters.
 /usr/bin/xattr -cr "$APP" 2>/dev/null || true
-# Inside out: the bundle's seal covers the signed library.
-quiet_codesign --force --sign - "$DYLIB" \
-    || die "la signature d'IsletBridge.dylib a échoué."
-quiet_codesign --force --sign - "$APP" \
-    || die "la signature d'$APP_NAME.app a échoué."
+
+# macOS ties a permission (Accessibility) to the signature of the app. An
+# ad-hoc signature only names this exact build, so the next one loses the
+# permission; a certificate that stays the same makes every build the same app.
+signed_with_identity=0
+ADHOC_REMEDY="lancez une fois scripts/make-signing-identity.sh"
+if has_signing_identity; then
+    step "Signature avec l'identité « $SIGNING_IDENTITY »…"
+    # No timestamp: it would need Apple's server, hence the network.
+    SIGN_ARGS=(--timestamp=none --sign "$SIGNING_IDENTITY")
+    if [ -n "${ISLET_SIGNING_KEYCHAIN:-}" ]; then
+        SIGN_ARGS+=(--keychain "$ISLET_SIGNING_KEYCHAIN")
+    fi
+    if sign_bundle "${SIGN_ARGS[@]}"; then
+        signed_with_identity=1
+    else
+        # The identity must never stand between the user and a working app
+        # (access to the key refused, keychain locked…): sign ad hoc instead.
+        warn "la signature avec l'identité « $SIGNING_IDENTITY » a échoué (message ci-dessus). Si macOS demande l'accès à la clé, répondez « Toujours autoriser »."
+        ADHOC_REMEDY="réglez le problème de signature signalé ci-dessus, puis relancez la construction"
+    fi
+fi
+
+if [ "$signed_with_identity" -ne 1 ]; then
+    step "Signature ad hoc…"
+    printf "    Signée ainsi, %s perd l'autorisation Accessibilité (si vous l'utilisez) à chaque mise à jour. Pour la conserver : %s\n" "$APP_NAME" "$ADHOC_REMEDY"
+    # Both again, whatever the attempt above got done: never a bundle signed
+    # half one way, half the other.
+    sign_bundle --sign - || die "la signature d'$APP_NAME.app a échoué."
+fi
+
 quiet_codesign --verify --deep --strict "$APP" \
     || die "la signature d'$APP_NAME.app est invalide."
 

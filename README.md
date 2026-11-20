@@ -101,6 +101,14 @@ Pour mettre à jour, relance la même commande après un `git pull`.
   (Réglages Système → Confidentialité et sécurité → Accessibilité) : c'est le
   seul moyen qu'offre macOS de savoir où sont les éléments de la barre. Islet ne
   s'en sert que pour lire leur position.
+  Pour que macOS conserve cette autorisation d'une mise à jour à l'autre, lance
+  une fois `scripts/make-signing-identity.sh`, puis `./install.sh` : le script
+  crée dans ton trousseau un certificat local (« Islet Local Signing »,
+  auto-signé, sans `sudo` ni réglage de confiance modifié) avec lequel chaque
+  version est ensuite signée. macOS peut demander une fois le mot de passe de
+  ton trousseau pour laisser `codesign` utiliser la clé : réponds « Toujours
+  autoriser ». Autorise Islet une dernière fois après cette installation ; les
+  suivantes gardent l'autorisation.
 - **Si l'icône a disparu** (macOS cache derrière l'encoche les icônes qui ne
   tiennent pas dans la barre des menus) : fais un clic droit sur l'île, ou
   relance Islet depuis Spotlight. Le même menu s'ouvre.
@@ -179,12 +187,17 @@ Quelques choix qui expliquent le comportement :
   voisin. Islet fait ce qui reste possible : par défaut elle se replie dès que
   le pointeur s'en approche, et avec l'option « Éviter les icônes de la barre
   des menus » elle ne s'étend que là où il y a de la place.
-- Cette option a deux limites. L'app étant signée localement, macOS oublie
-  l'autorisation Accessibilité à chaque mise à jour : il faut alors retirer
-  Islet de la liste dans Réglages Système, puis l'autoriser de nouveau. Et
-  seul le lecteur est ajusté : les bannières (volume, charge, batterie, sortie
-  audio), qui ne durent que quelques secondes, passent encore par-dessus la
-  barre.
+- Cette option a deux limites. Tant que `scripts/make-signing-identity.sh` n'a
+  pas été lancé, l'app est signée « ad hoc » : sa signature change à chaque
+  compilation, et macOS oublie l'autorisation Accessibilité à chaque mise à
+  jour (il faut alors retirer Islet de la liste dans Réglages Système, puis
+  l'autoriser de nouveau). Une fois le script lancé, Islet réinstallée et
+  autorisée une dernière fois, l'autorisation est conservée, sur ce Mac et tant
+  que le certificat reste dans le trousseau (il est valable dix ans ; si la
+  signature avec lui échoue, l'app est de nouveau signée « ad hoc » et
+  `./install.sh` le signale). Et seul le lecteur est ajusté : les bannières (volume,
+  charge, batterie, sortie audio), qui ne durent que quelques secondes, passent
+  encore par-dessus la barre.
 - Développée et vérifiée sur un MacBook Pro 14" (puce Apple, macOS 27). La
   disposition sans encoche n'a été vérifiée qu'en simulation, et les Mac Intel
   n'ont pas été testés.

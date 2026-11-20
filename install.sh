@@ -246,14 +246,35 @@ ${BOLD}$APP_NAME est installée :${RESET} $INSTALLED_APP
   • Pour mettre à jour : relancez ./install.sh    Pour désinstaller : ./uninstall.sh
 EOF
 
-# macOS ties the Accessibility permission to the exact build of a locally
-# signed app, so an update silently loses it: say so when the option is on.
+# macOS ties the Accessibility permission to the signature of the app. Ad-hoc
+# signed, that is the exact build, so an update silently loses the permission;
+# signed with the identity of scripts/make-signing-identity.sh, it is the
+# certificate, which stays. Say what is true of this copy when the option is on.
 if [ "$(defaults read "$BUNDLE_ID" fitToMenuBar 2>/dev/null || true)" = "1" ]; then
-    cat <<EOF
+    # The designated requirement names a certificate only when there is one.
+    requirement="$(codesign -d -r- "$INSTALLED_APP" 2>/dev/null || true)"
+    case "$requirement" in
+        *"certificate leaf"*)
+            cat <<EOF
+
+  ${BOLD}« Éviter les icônes de la barre des menus » est activé.${RESET} $APP_NAME est signée
+  avec votre identité locale : macOS conserve l'autorisation Accessibilité d'une
+  mise à jour à l'autre. Si l'option reste sans effet (c'est le cas à la
+  première installation qui suit la création de l'identité) : dans Réglages
+  Système → Confidentialité et sécurité → Accessibilité, retirez $APP_NAME de la
+  liste (bouton –), puis autorisez-la de nouveau. Ce sera la dernière fois.
+EOF
+            ;;
+        *)
+            cat <<EOF
 
   ${BOLD}« Éviter les icônes de la barre des menus » est activé.${RESET} macOS oublie
   l'autorisation Accessibilité à chaque mise à jour : dans Réglages Système →
   Confidentialité et sécurité → Accessibilité, retirez $APP_NAME de la liste
   (bouton –), puis autorisez-la de nouveau quand elle le demande.
+  Pour ne plus avoir à le refaire : lancez une fois
+  scripts/make-signing-identity.sh, puis de nouveau ./install.sh
 EOF
+            ;;
+    esac
 fi
