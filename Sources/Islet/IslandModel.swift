@@ -141,6 +141,9 @@ final class IslandModel: ObservableObject {
     @Published private(set) var isHovering = false
     /// Whether the compact player is on screen (playing, or paused a moment ago).
     @Published private(set) var showsMedia = false
+    /// The closed island has stepped back behind the notch because the pointer
+    /// is in the menu bar right beside it.
+    @Published private(set) var isYielding = false
     @Published var metrics: IslandMetrics = .placeholder
 
     let settings: Settings
@@ -152,6 +155,8 @@ final class IslandModel: ObservableObject {
     private let hudDismissal = DelayedAction()
     private let hoverIntent = DelayedAction()
     private let mediaLinger = DelayedAction()
+    private let yieldTimer = DelayedAction()
+    private var pointerIsBeside = false
 
     /// The last track the island saw playing. Announcements compare with it
     /// rather than with the previous snapshot: a track first reported paused,
@@ -192,6 +197,13 @@ final class IslandModel: ObservableObject {
 
     var mode: IslandMode {
         if isExpanded { return .expanded }
+        // Stepping aside: back behind the notch, whatever there is to show.
+        if isYielding { return .idle }
+        return restingMode
+    }
+
+    /// What the closed island shows when the pointer is not beside it.
+    private var restingMode: IslandMode {
         if let hud { return .hud(hud) }
         if showsMedia, nowPlaying != nil { return .media }
         return .idle
@@ -241,24 +253,40 @@ final class IslandModel: ObservableObject {
     /// The area, anchored to the top centre of the screen, where the pointer
     /// counts as being on the island. Never smaller than the notch itself.
     var hitSize: CGSize {
-        let layout = self.layout
         if isExpanded {
+            let layout = self.layout
             return CGSize(width: layout.width + 20, height: layout.height + 14)
         }
-        // A banner's caption hangs below the menu bar, over the apps' windows:
-        // it grew under the pointer there, the pointer never aimed at it. Only
-        // the strip beside the notch counts.
-        var height = layout.height
-        if case .hud(let hud) = mode, hud.hasCaption {
-            height = metrics.notchHeight
-        }
-        return CGSize(width: max(layout.width, metrics.notchWidth),
-                      height: max(height, metrics.hasNotch ? metrics.notchHeight : 5))
+        // Closed, the island is only the notch as far as the pointer goes. Its
+        // wings lie over the menu bar's own menus and icons, and a banner's
+        // caption over the apps' windows: a pointer there is aiming at those,
+        // so it must neither open the island nor lose its click to it.
+        return CGSize(width: metrics.notchWidth,
+                      height: metrics.hasNotch ? metrics.notchHeight : 5)
+    }
+
+    /// Width of the menu bar strip, centred on the notch, in which the closed
+    /// island steps aside for the pointer: what its wings cover, plus a margin
+    /// so that it moves just before the pointer arrives. Zero when nothing
+    /// sticks out of the notch.
+    var yieldZoneWidth: CGFloat {
+        guard !isExpanded else { return 0 }
+        // Measured on what the island would show, not on what it shows while
+        // stepping aside: otherwise the zone would vanish under the pointer
+        // and the wings would come straight back.
+        let covered = layout(for: restingMode).width
+        guard covered > metrics.notchWidth else { return 0 }
+        return covered + 2 * 14
     }
 
     // MARK: Pointer
 
-    func pointerMoved(inside: Bool) {
+    /// - Parameters:
+    ///   - inside: the pointer is on the island (the notch, or the open island).
+    ///   - beside: the pointer is in the menu bar right next to the notch, in
+    ///     the strip the closed island's wings cover.
+    func pointerMoved(inside: Bool, beside: Bool = false) {
+        updateYielding(beside: beside)
         guard inside != isHovering else { return }
         withAnimation(IslandAnimation.hover) { isHovering = inside }
 
@@ -272,6 +300,28 @@ final class IslandModel: ObservableObject {
             }
         } else {
             hoverIntent.schedule(after: 0.3) { [weak self] in self?.setExpanded(false) }
+        }
+    }
+
+    /// macOS gives apps no way to move the menu bar's items out of the way, so
+    /// the island moves instead: when the pointer comes to what the wings
+    /// cover, they retract behind the notch, and return once it has left.
+    private func updateYielding(beside: Bool) {
+        guard beside != pointerIsBeside else { return }
+        pointerIsBeside = beside
+
+        if beside {
+            // A short dwell, so a pointer merely crossing the menu bar does
+            // not make the island flinch.
+            yieldTimer.schedule(after: 0.1) { [weak self] in
+                guard let self, self.pointerIsBeside, !self.isYielding else { return }
+                withAnimation(IslandAnimation.close) { self.isYielding = true }
+            }
+        } else {
+            yieldTimer.schedule(after: 0.45) { [weak self] in
+                guard let self, !self.pointerIsBeside, self.isYielding else { return }
+                withAnimation(IslandAnimation.morph) { self.isYielding = false }
+            }
         }
     }
 

@@ -115,6 +115,51 @@ final class IslandModelTests {
         #expect(model.layout.width == notched.notchWidth)
     }
 
+    @Test("Closed, only the notch counts as the island: the wings lie over the menu bar's own items")
+    func wingsAreNotPartOfTheHitArea() {
+        model.receive(nowPlaying: song("A", playing: true))
+        clearBanner()
+        #expect(model.mode == .media)
+        #expect(model.layout.width > notched.notchWidth)
+        #expect(model.hitSize.width == notched.notchWidth)
+        #expect(model.hitSize.height == notched.notchHeight)
+    }
+
+    @Test("The island steps behind the notch when the pointer comes beside it, and returns after")
+    func islandStepsAsideForThePointer() async {
+        #expect(model.yieldZoneWidth == 0, "nothing sticks out of the notch at rest")
+
+        model.receive(nowPlaying: song("A", playing: true))
+        clearBanner()
+        let zone = model.yieldZoneWidth
+        #expect(zone > model.layout.width, "the zone covers the wings plus a margin")
+
+        model.pointerMoved(inside: false, beside: true)
+        #expect(model.mode == .media, "a pointer merely crossing must not make the island flinch")
+        await pause(0.4)
+        #expect(model.isYielding)
+        #expect(model.mode == .idle)
+        #expect(model.layout.width == notched.notchWidth)
+        #expect(model.yieldZoneWidth == zone, "the zone must not vanish under the pointer")
+
+        model.pointerMoved(inside: false, beside: false)
+        #expect(model.mode == .idle, "it waits for the pointer to be gone")
+        await pause(0.9)
+        #expect(!model.isYielding)
+        #expect(model.mode == .media)
+    }
+
+    @Test("Crossing the menu bar beside the notch quickly does not move the island")
+    func crossingBesideDoesNotYield() async {
+        model.receive(nowPlaying: song("A", playing: true))
+        clearBanner()
+        model.pointerMoved(inside: false, beside: true)
+        model.pointerMoved(inside: false, beside: false)
+        await pause(0.4)
+        #expect(!model.isYielding)
+        #expect(model.mode == .media)
+    }
+
     @Test("A banner's caption, below the menu bar, never counts as the island")
     func captionIsNotPartOfTheHitArea() {
         model.present(.output(AudioOutput(name: "AirPods", symbolName: "airpods")), for: 10)

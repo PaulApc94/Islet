@@ -9,6 +9,19 @@ if CommandLine.arguments.contains("--unregister-login-item") {
     exit(0)
 }
 
+// `Islet --login-item-status` says whether macOS will launch Islet at login:
+// handy to check an installation from a terminal.
+if CommandLine.arguments.contains("--login-item-status") {
+    switch SMAppService.mainApp.status {
+    case .enabled: print("enabled")
+    case .requiresApproval: print("requiresApproval")
+    case .notRegistered: print("notRegistered")
+    case .notFound: print("notFound")
+    @unknown default: print("unknown")
+    }
+    exit(0)
+}
+
 // Islet is a menu-bar agent: no Dock icon and no regular window. Everything
 // lives in a borderless panel pinned to the notch (see IslandWindowController).
 MainActor.assumeIsolated {

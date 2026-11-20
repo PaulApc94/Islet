@@ -35,10 +35,12 @@ struct IslandView: View {
         } else if model.showsCompactMedia, let nowPlaying = model.nowPlaying {
             CompactMediaView(nowPlaying: nowPlaying,
                              metrics: model.metrics,
-                             showsCaption: model.hud == .track,
+                             showsCaption: model.mode == .hud(.track),
                              namespace: namespace)
                 .transition(.islandContent)
-        } else if let hud = model.hud {
+        } else if case .hud(let hud) = model.mode {
+            // From the mode, not from `model.hud`: while the island steps aside
+            // for the pointer, a pending banner must not be drawn.
             HUDView(hud: hud, metrics: model.metrics)
                 .id(hud.kind)
                 .transition(.islandContent)

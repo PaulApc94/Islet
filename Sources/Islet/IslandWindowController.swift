@@ -230,10 +230,21 @@ final class IslandWindowController {
         // arranged above this one never counts as the island.
         let inside = isPressingIsland || NSMouseInRect(location, hitArea, false)
 
+        // The menu bar strip the closed island's wings cover, beside the notch.
+        // The panel keeps ignoring the mouse there (clicks reach the menu bar);
+        // the model makes the island step aside so what it covers can be seen.
+        let zoneWidth = model.yieldZoneWidth
+        let stripHeight = model.metrics.notchHeight
+        let strip = CGRect(x: screenFrame.midX - zoneWidth / 2,
+                           y: screenFrame.maxY - stripHeight,
+                           width: zoneWidth,
+                           height: stripHeight)
+        let beside = !inside && zoneWidth > 0 && NSMouseInRect(location, strip, false)
+
         if panel.ignoresMouseEvents == inside {
             panel.ignoresMouseEvents = !inside
         }
-        model.pointerMoved(inside: inside)
+        model.pointerMoved(inside: inside, beside: beside)
         setHoverPoll(active: inside)
     }
 

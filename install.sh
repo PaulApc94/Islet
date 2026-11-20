@@ -215,6 +215,7 @@ cat <<EOF
 ${BOLD}$APP_NAME est installée :${RESET} $INSTALLED_APP
 
   • L'îlot vit dans l'encoche, tout en haut de l'écran.
+  • Il se lancera tout seul à chaque ouverture de session (réglable dans son menu).
   • Les réglages : l'icône $APP_NAME de la barre des menus, ou un clic droit sur l'îlot.
   • Pour mettre à jour : relancez ./install.sh    Pour désinstaller : ./uninstall.sh
 EOF

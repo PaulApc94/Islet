@@ -80,8 +80,15 @@ Pour mettre à jour, relance la même commande après un `git pull`.
 
 ## Utilisation
 
+- **Islet se lance toute seule à chaque ouverture de session.** C'est activé au
+  premier lancement ; pour l'arrêter, décoche « Lancer au démarrage » dans les
+  réglages (Islet ne le réactivera pas dans ton dos).
 - **Passe le pointeur sur l'encoche** : l'île gonfle légèrement, puis s'ouvre.
   Éloigne-le et elle se referme.
+- **Approche le pointeur d'un menu ou d'une icône que l'île recouvre** : elle se
+  replie derrière l'encoche pour te laisser voir et cliquer, puis revient quand
+  le pointeur s'éloigne. Fermée, l'île ne prend jamais un clic destiné à la
+  barre des menus.
 - **Les réglages** sont dans l'icône en forme de capsule de la barre des menus :
   activer ou non chaque activité (dont la musique), ouvrir au survol ou
   seulement au clic, retour haptique, lancement au démarrage du Mac, quitter.
@@ -153,11 +160,15 @@ Quelques choix qui expliquent le comportement :
   s'affiche.
 - Les barres audio sont décoratives : elles ne suivent pas le signal réel, ce
   qui demanderait l'autorisation d'enregistrer l'écran.
-- Pendant la lecture, l'île déborde d'environ 44 points de chaque côté de
-  l'encoche, par-dessus la barre des menus : un menu ou une icône placé juste à
-  côté de l'encoche est alors masqué, et le survoler ouvre l'île. Si cela te
-  gêne, décoche « Musique en direct » dans les réglages : l'île reste cachée
-  derrière l'encoche et s'ouvre toujours au survol.
+- **Les menus et les icônes de la barre des menus ne se décalent pas** quand
+  l'île s'étend. macOS place ces éléments autour de l'encoche physique et ne
+  donne aux apps aucun moyen de les déplacer, ni même de savoir où ils sont sans
+  l'autorisation Accessibilité. Pendant la lecture, l'île déborde d'environ 44
+  points de chaque côté de l'encoche et peut donc masquer le menu ou l'icône
+  voisin. Islet fait ce qui reste possible : elle se replie dès que le pointeur
+  s'en approche. Si cela te gêne encore, décoche « Musique en direct » dans les
+  réglages : l'île reste cachée derrière l'encoche et s'ouvre toujours au
+  survol.
 - Développée et vérifiée sur un MacBook Pro 14" (puce Apple, macOS 27). La
   disposition sans encoche n'a été vérifiée qu'en simulation, et les Mac Intel
   n'ont pas été testés.
