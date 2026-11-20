@@ -1,9 +1,11 @@
 import AppKit
+import Combine
 import ServiceManagement
 
 /// The settings menu. It lives in the menu-bar icon, and also opens from the
 /// island itself (right-click) or when the app is launched again: on a crowded
-/// menu bar, macOS hides the icons that do not fit behind the notch.
+/// menu bar, macOS hides the icons that do not fit behind the notch, and the
+/// user can hide Islet's own to leave its place beside the notch free.
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -12,6 +14,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// The app the user was working in before Islet's menu took the keyboard.
     private var lastOtherApp: NSRunningApplication?
     private var activationObserver: NSObjectProtocol?
+    private var iconObservation: AnyCancellable?
+    private var visibilityObservation: NSKeyValueObservation?
 
     init(settings: Settings) {
         self.settings = settings
@@ -42,6 +46,27 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         menu.delegate = self
         statusItem.menu = menu
+
+        statusItem.isVisible = settings.showMenuBarIcon
+        // `@Published` emits before storing the new value: use the one emitted.
+        iconObservation = settings.$showMenuBarIcon
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] visible in
+                MainActor.assumeIsolated { self?.statusItem.isVisible = visible }
+            }
+        // The other way round: the icon can also be dragged out of the menu
+        // bar (Command-drag). The setting follows, or the icon would be back
+        // at the next launch.
+        visibilityObservation = statusItem.observe(\.isVisible, options: [.new]) { [weak self] _, change in
+            guard let visible = change.newValue else { return }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.settings.showMenuBarIcon != visible else { return }
+                    self.settings.showMenuBarIcon = visible
+                }
+            }
+        }
     }
 
     /// Opens the settings menu at a point on screen (global coordinates).
@@ -83,6 +108,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(fitItem())
         menu.addItem(toggle(L10n.t("Ouvrir au survol", "Expand on Hover"), \.expandOnHover))
         menu.addItem(toggle(L10n.t("Retour haptique", "Haptic Feedback"), \.haptics))
+        menu.addItem(toggle(L10n.t("Icône dans la barre des menus", "Menu Bar Icon"), \.showMenuBarIcon))
         menu.addItem(loginItem())
         menu.addItem(.separator())
 

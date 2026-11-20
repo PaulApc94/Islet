@@ -425,6 +425,22 @@ final class IslandModelTests {
     }
 }
 
+// MARK: - Settings
+
+@Suite("Settings")
+struct SettingsTests {
+    @Test("Islet's menu bar icon shows by default, and hiding it is remembered")
+    func menuBarIconSetting() throws {
+        let domain = "islet.tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+
+        #expect(Islet.Settings(defaults: defaults).showMenuBarIcon)
+        Islet.Settings(defaults: defaults).showMenuBarIcon = false
+        #expect(!Islet.Settings(defaults: defaults).showMenuBarIcon, "read back by the next launch")
+    }
+}
+
 // MARK: - Pointer geometry
 
 @Suite("Pointer zones")

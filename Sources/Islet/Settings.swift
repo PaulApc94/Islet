@@ -20,6 +20,10 @@ final class Settings: ObservableObject {
     @Published var showAudioOutput: Bool { didSet { defaults.set(showAudioOutput, forKey: Key.showAudioOutput) } }
     @Published var showTrackChanges: Bool { didSet { defaults.set(showTrackChanges, forKey: Key.showTrackChanges) } }
     @Published var haptics: Bool { didSet { defaults.set(haptics, forKey: Key.haptics) } }
+    /// Islet's own icon in the menu bar. Hidden, it leaves its place beside the
+    /// notch free; the settings then open from the island (right-click) or by
+    /// launching Islet again.
+    @Published var showMenuBarIcon: Bool { didSet { defaults.set(showMenuBarIcon, forKey: Key.showMenuBarIcon) } }
 
     private let defaults: UserDefaults
 
@@ -32,6 +36,7 @@ final class Settings: ObservableObject {
         static let showAudioOutput = "showAudioOutput"
         static let showTrackChanges = "showTrackChanges"
         static let haptics = "haptics"
+        static let showMenuBarIcon = "showMenuBarIcon"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -45,6 +50,7 @@ final class Settings: ObservableObject {
             Key.showAudioOutput: true,
             Key.showTrackChanges: true,
             Key.haptics: true,
+            Key.showMenuBarIcon: true,
         ])
         expandOnHover = defaults.bool(forKey: Key.expandOnHover)
         showNowPlaying = defaults.bool(forKey: Key.showNowPlaying)
@@ -54,5 +60,6 @@ final class Settings: ObservableObject {
         showAudioOutput = defaults.bool(forKey: Key.showAudioOutput)
         showTrackChanges = defaults.bool(forKey: Key.showTrackChanges)
         haptics = defaults.bool(forKey: Key.haptics)
+        showMenuBarIcon = defaults.bool(forKey: Key.showMenuBarIcon)
     }
 }

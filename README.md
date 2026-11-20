@@ -109,9 +109,13 @@ Pour mettre à jour, relance la même commande après un `git pull`.
   ton trousseau pour laisser `codesign` utiliser la clé : réponds « Toujours
   autoriser ». Autorise Islet une dernière fois après cette installation ; les
   suivantes gardent l'autorisation.
-- **Si l'icône a disparu** (macOS cache derrière l'encoche les icônes qui ne
-  tiennent pas dans la barre des menus) : fais un clic droit sur l'île, ou
-  relance Islet depuis Spotlight. Le même menu s'ouvre.
+- **Pour laisser plus de place à côté de l'encoche**, décoche « Icône dans la
+  barre des menus » : Islet retire sa propre icône, et le lecteur a d'autant
+  moins de chances de recouvrir celle d'une autre app. Les réglages restent à
+  un clic droit sur l'île.
+- **Si l'icône a disparu** (tu l'as masquée, ou macOS cache derrière l'encoche
+  les icônes qui ne tiennent pas dans la barre des menus) : fais un clic droit
+  sur l'île, ou relance Islet depuis Spotlight. Le même menu s'ouvre.
 - **Sur un Mac sans encoche** (ou un écran externe seul), l'île se dessine en
   haut de l'écran, au centre : vise le bord supérieur pour l'ouvrir. Là, la
   pastille est l'île elle-même : elle ne se replie pas, et un clic dessus
