@@ -113,16 +113,17 @@ Pour mettre à jour, relance la même commande après un `git pull`.
   barre des menus » : Islet retire sa propre icône, et le lecteur a d'autant
   moins de chances de recouvrir celle d'une autre app. Les réglages restent à
   un clic droit sur l'île.
-- **Pour que l'icône voisine s'écarte quand l'île sort**, coche « Décaler
-  l'icône voisine quand l'île sort ». L'icône d'Islet dans la barre des menus
-  se réduit à une petite capsule : au repos elle tient l'icône placée à sa
-  gauche près de l'encoche, et dès que l'île sort (lecture, bannière,
-  ouverture) elle se retire et l'icône voisine glisse vers la droite ; quand
-  l'île rentre, tout revient en place. Un clic sur la petite capsule ouvre les
-  réglages, comme l'icône habituelle. L'option remplace cette dernière et
-  « Éviter les icônes de la barre des menus », et demande elle aussi
-  l'autorisation **Accessibilité** : Islet doit mesurer la place libre pour ne
-  pas pousser l'icône voisine trop loin. Ses limites sont décrites plus bas.
+- **Pour que les icônes s'écartent quand l'île sort**, coche « Décaler les
+  icônes quand l'île sort ». L'icône d'Islet se réduit à une petite capsule,
+  placée à droite des icônes des apps, juste avant celles du système : au
+  repos elle tient toute la rangée à sa gauche près de l'encoche, et dès que
+  l'île sort (lecture, bannière, ouverture) elle se retire et la rangée glisse
+  vers la droite ; quand l'île rentre, tout revient en place. Un clic sur la
+  petite capsule ouvre les réglages, comme l'icône habituelle. L'option
+  remplace cette dernière et « Éviter les icônes de la barre des menus », et
+  demande elle aussi l'autorisation **Accessibilité** : Islet doit mesurer la
+  place libre pour ne pas pousser les icônes trop loin. Ses limites sont
+  décrites plus bas.
 - **Si l'icône a disparu** (tu l'as masquée, ou macOS cache derrière l'encoche
   les icônes qui ne tiennent pas dans la barre des menus) : fais un clic droit
   sur l'île, ou relance Islet depuis Spotlight. Le même menu s'ouvre.
@@ -203,15 +204,17 @@ Quelques choix qui expliquent le comportement :
   voisin. Islet fait ce qui reste possible : par défaut elle se replie dès que
   le pointeur s'en approche, et avec l'option « Éviter les icônes de la barre
   des menus » elle ne s'étend que là où il y a de la place.
-- **« Décaler l'icône voisine » ne déplace qu'une partie de la barre.** macOS
-  range les icônes depuis le bord droit de l'écran : quand l'une s'élargit,
-  celles qui sont à sa gauche glissent vers l'encoche. Islet ne peut donc
-  pousser que ce qui se trouve à gauche de son propre élément (maintiens ⌘ et
-  fais-le glisser plus à droite pour en pousser davantage), et de peu : macOS
-  range derrière son bouton « » toute icône qui s'approche à moins de 27 points
-  de l'encoche, si bien que sur une barre bien remplie la course est d'une
-  vingtaine de points. C'est assez pour dégager le lecteur compact ; l'île
-  ouverte, plus large, passe encore par-dessus. Quand les menus de l'app au
+- **« Décaler les icônes » les déplace de peu, et pas toutes.** macOS range les
+  icônes depuis le bord droit de l'écran : quand l'une s'élargit, celles qui
+  sont à sa gauche glissent vers l'encoche. Islet ne pousse donc que ce qui se
+  trouve à gauche de sa capsule : les icônes des apps, pas celles du système
+  (son, Wi-Fi, horloge), qui sont à sa droite. Et de peu : macOS range derrière
+  son bouton « » toute icône qui s'approche à moins de 27 points de l'encoche,
+  si bien que sur une barre bien remplie la course est d'une vingtaine de
+  points. C'est assez pour dégager le lecteur compact ; l'île ouverte, plus
+  large, passe encore par-dessus les premières icônes. L'emplacement de la
+  capsule est demandé à macOS par une préférence d'AppKit (`NSStatusItem
+  Preferred Position`), qu'il n'applique qu'à un élément qu'il n'a jamais vu. Quand les menus de l'app au
   premier plan font le tour de l'encoche (Chrome), macOS range lui-même ces
   icônes derrière « » et il n'y a plus rien à pousser. Les repères utilisés
   (écart entre deux éléments, marge près de l'encoche) ont été mesurés sur

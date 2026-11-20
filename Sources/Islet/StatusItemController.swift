@@ -16,7 +16,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var activationObserver: NSObjectProtocol?
     private var modeObservation: AnyCancellable?
     private var visibilityObservation: NSKeyValueObservation?
-    private var iconImage: NSImage?
 
     init(settings: Settings) {
         self.settings = settings
@@ -42,7 +41,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             let image = NSImage(systemSymbolName: "capsule.fill", accessibilityDescription: "Islet")?
                 .withSymbolConfiguration(configuration)
             image?.isTemplate = true
-            iconImage = image
             button.image = image
         }
 
@@ -73,11 +71,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     // MARK: Icon or spacer
 
-    /// The item is either Islet's icon, or a spacer that pushes the icon on its
-    /// left (see `MenuBarSpring`). The spacer still shows the capsule, as small
-    /// as it is narrow: an item that takes room without showing anything looks
-    /// like a hole in the menu bar, and gives nothing to click.
+    /// Islet is in the menu bar either as its icon, or as a spacer that pushes
+    /// the icons on its left (see `MenuBarSpring`). The spacer still shows the
+    /// capsule, as small as it is narrow: an item that takes room without
+    /// showing anything looks like a hole in the menu bar, and gives nothing to
+    /// click.
+    ///
+    /// The spacer is an item of its own, with its own place: it only pushes
+    /// what is on its left, so it belongs as far right as an app's item goes,
+    /// where the icon has no reason to be.
     private var isSpacer = false
+    private var springItem: NSStatusItem?
     private var spacerTimer: Timer?
     /// What the item really has right now, in the middle of an animation too.
     private var shownLength: CGFloat?
@@ -109,29 +113,60 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         shownLength = nil
         isSpacer = spacer
         if spacer {
-            // Out of the menu bar until the spring knows the room. Sized while
-            // it is out: an item that appears with its old width is, for one
-            // layout pass, too wide for its place.
             statusItem.isVisible = false
-            statusItem.button?.image = nil
-            statusItem.length = MenuBarSpring.minimumLength
+            // (The spacer's own item is made when the spring first shows it.)
+            springItem?.isVisible = false
         } else {
-            statusItem.button?.image = iconImage
-            statusItem.length = NSStatusItem.squareLength
+            if let springItem {
+                NSStatusBar.system.removeStatusItem(springItem)
+                self.springItem = nil
+            }
             statusItem.isVisible = icon
         }
     }
 
+    private static let springName = "IsletSpacer"
+
+    /// macOS puts a new item at the far left, next to the notch, where it would
+    /// have nothing to push. For a name it has never seen, it still honours
+    /// the preferred position AppKit keeps for a named item: on the menu bar
+    /// this was measured on, 230 lands the spacer right of the last app icon,
+    /// left of the system's own (larger is further left). AppKit removes the
+    /// stored value once it has used it; a registered default cannot be
+    /// removed, so the item finds it again whenever it is shown.
+    ///
+    /// The place macOS first gives a name sticks to it: an item that was
+    /// hidden before it was ever laid out stayed at the far left for good.
+    private static func registerSpringPosition() {
+        let key = "NSStatusItem Preferred Position \(springName)"
+        UserDefaults.standard.register(defaults: [key: 230])
+        if UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")?[key] == nil {
+            UserDefaults.standard.set(230, forKey: key)
+        }
+    }
+
+    /// Made narrow, when the spring first needs it: an item that appears wider
+    /// than it should be is, for one layout pass, too wide for its place.
+    private func makeSpringItem(length: CGFloat) -> NSStatusItem {
+        Self.registerSpringPosition()
+        let item = NSStatusBar.system.statusItem(withLength: length)
+        item.autosaveName = Self.springName
+        item.menu = menu
+        return item
+    }
+
     private func show(_ length: CGFloat?) {
         shownLength = length
-        if let length {
-            statusItem.button?.image = pill(forLength: length)
-            // Length first, for the same reason as above.
-            statusItem.length = length
-            if !statusItem.isVisible { statusItem.isVisible = true }
-        } else if statusItem.isVisible {
-            statusItem.isVisible = false
+        guard let length else {
+            if let springItem, springItem.isVisible { springItem.isVisible = false }
+            return
         }
+        let item = springItem ?? makeSpringItem(length: length)
+        springItem = item
+        item.button?.image = pill(forLength: length)
+        // Length first, for the same reason as above.
+        item.length = length
+        if !item.isVisible { item.isVisible = true }
     }
 
     /// Opens the settings menu at a point on screen (global coordinates).
@@ -236,9 +271,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private func pushItem() -> NSMenuItem {
         let waiting = settings.pushMenuBarIcons && !MenuBarProbe.isTrusted
         let title = waiting
-            ? L10n.t("Décaler l'icône voisine quand l'île sort (à autoriser dans Réglages)…",
-                     "Move the Next Icon Aside (allow in System Settings)…")
-            : L10n.t("Décaler l'icône voisine quand l'île sort", "Move the Next Icon Aside")
+            ? L10n.t("Décaler les icônes quand l'île sort (à autoriser dans Réglages)…",
+                     "Move the Icons Aside (allow in System Settings)…")
+            : L10n.t("Décaler les icônes quand l'île sort", "Move the Icons Aside")
         let item = NSMenuItem(title: title, action: #selector(togglePush), keyEquivalent: "")
         item.target = self
         item.state = settings.pushMenuBarIcons ? (waiting ? .mixed : .on) : .off

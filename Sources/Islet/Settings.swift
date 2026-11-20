@@ -20,9 +20,9 @@ final class Settings: ObservableObject {
             if fitToMenuBar, pushMenuBarIcons { pushMenuBarIcons = false }
         }
     }
-    /// Islet's menu bar item, shrunk to a small capsule, holds the icon on its
-    /// left near the notch while the island rests, and lets it slide away when
-    /// the island comes out (see `MenuBarSpring`). It takes the place of the
+    /// Islet's menu bar item, shrunk to a small capsule, holds the icons on its
+    /// left near the notch while the island rests, and lets them slide away
+    /// when the island comes out (see `MenuBarSpring`). It takes the place of the
     /// icon, and moving the neighbour away is the opposite of fitting the
     /// player around it: turning this on turns those two off, and back.
     @Published var pushMenuBarIcons: Bool {
